@@ -37,7 +37,6 @@ pub async fn download_all(dest_dir: &Path) {
         .unwrap_or_else(|e| panic!("Cannot create downloads dir {:?}: {}", dest_dir, e));
 
     let client = Client::builder()
-        .timeout(Duration::from_secs(0)) // no request-level timeout — files are huge
         .connect_timeout(Duration::from_secs(30))
         .user_agent("wikigame/0.1 (https://github.com/wikigame)")
         .build()
