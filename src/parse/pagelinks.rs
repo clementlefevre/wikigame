@@ -1,9 +1,12 @@
 /// Parse `enwiki-latest-pagelinks.sql.gz` and write `edges.tmp`.
 ///
 /// Schema (MW 1.43+):
-///   pl_from          INT UNSIGNED   col 0  (wiki page_id of the source article)
-///   pl_target_id     BIGINT UNSIGNED col 1  (FK → linktarget.lt_id)
-///   pl_from_namespace INT           col 2
+///   pl_from           INT UNSIGNED    col 0  (wiki page_id of the source article)
+///   pl_from_namespace INT             col 1  (namespace of the source page; added MW 1.19/2012)
+///   pl_target_id      BIGINT UNSIGNED col 2  (FK → linktarget.lt_id; added MW 1.41/2024)
+///
+/// IMPORTANT: pl_from_namespace (col 1) was added before pl_target_id (col 2),
+/// so the column order in the dump is pl_from, pl_from_namespace, pl_target_id.
 ///
 /// We resolve both sides to compact IDs using the pre-built maps.
 /// Unresolvable edges (link to non-article, redirect, or unknown page) are
@@ -48,16 +51,17 @@ pub fn parse_and_write(
             continue;
         }
 
-        // col 2: pl_from_namespace — only keep links originating from NS 0
-        // (col 2 may be absent in some older schema variants; be defensive)
-        if row.len() >= 3 {
-            let from_ns = match row[2].as_i64() {
-                Some(n) => n,
-                None => continue,
-            };
-            if from_ns != 0 {
-                continue;
-            }
+        // col 1: pl_from_namespace — only keep links originating from NS 0
+        // (must have at least 3 columns for this schema variant)
+        if row.len() < 3 {
+            continue;
+        }
+        let from_ns = match row[1].as_i64() {
+            Some(n) => n,
+            None => continue,
+        };
+        if from_ns != 0 {
+            continue;
         }
 
         // col 0: pl_from (wiki page_id)
@@ -70,8 +74,8 @@ pub fn parse_and_write(
             None => continue,
         };
 
-        // col 1: pl_target_id
-        let lt_id = match row[1].as_i64() {
+        // col 2: pl_target_id (FK into linktarget table)
+        let lt_id = match row[2].as_i64() {
             Some(n) if n > 0 => n as u64,
             _ => continue,
         };

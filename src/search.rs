@@ -16,8 +16,7 @@ use std::time::Instant;
 
 use hashbrown::HashMap;
 
-use crate::graph::WikiGraph;
-use petgraph::visit::NodeIndexable;
+use crate::graph::WikiCsr;
 
 #[derive(Debug)]
 pub struct SearchResult {
@@ -32,8 +31,8 @@ pub struct SearchResult {
 /// Find the shortest path between `start_cid` and `end_cid`.
 /// Returns `None` if the nodes are not connected.
 pub fn shortest_path(
-    forward: &WikiGraph,
-    backward: &WikiGraph,
+    forward: &WikiCsr,
+    backward: &WikiCsr,
     start_cid: u32,
     end_cid: u32,
 ) -> Option<SearchResult> {
@@ -83,9 +82,7 @@ pub fn shortest_path(
                     None => break,
                 };
 
-                let node_idx = forward.from_index(node as usize);
-                for &nb_idx in forward.neighbors_slice(node_idx) {
-                    let nb = forward.to_index(nb_idx) as u32;
+                for &nb in forward.neighbors(node) {
                     if !visited_fwd.contains_key(&nb) {
                         visited_fwd.insert(nb, node);
                         queue_fwd.push_back(nb);
@@ -109,9 +106,7 @@ pub fn shortest_path(
                     None => break,
                 };
 
-                let node_idx = backward.from_index(node as usize);
-                for &nb_idx in backward.neighbors_slice(node_idx) {
-                    let nb = backward.to_index(nb_idx) as u32;
+                for &nb in backward.neighbors(node) {
                     if !visited_bwd.contains_key(&nb) {
                         visited_bwd.insert(nb, node);
                         queue_bwd.push_back(nb);
