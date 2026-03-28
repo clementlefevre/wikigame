@@ -1,0 +1,8 @@
+/target
+
+# Wikipedia dump files (multi-GB, never commit)
+data/downloads/
+data/processed/
+
+# Temp files
+*.tmp

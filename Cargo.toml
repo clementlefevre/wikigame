@@ -1,0 +1,44 @@
+[package]
+name = "wikigame"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "wikigame"
+path = "src/main.rs"
+
+[dependencies]
+# Graph engine
+petgraph = "0.6"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Streaming gzip decompression
+flate2 = "1"
+
+# Binary serialization for small metadata files
+bincode = "1"
+serde = { version = "1", features = ["derive"] }
+
+# Progress bars
+indicatif = { version = "0.17", features = ["rayon"] }
+
+# Fast hashmaps
+hashbrown = { version = "0.15", features = ["serde"] }
+
+# HTTP client for downloading Wikipedia dumps
+reqwest = { version = "0.12", features = ["stream", "native-tls"], default-features = false }
+futures-util = "0.3"
+
+# Web server (stretch goal)
+axum = { version = "0.8", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
