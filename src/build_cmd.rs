@@ -4,10 +4,14 @@
 ///   1. Parse page.sql.gz   → compact ID mapping + title lookup tables
 ///   2. Parse linktarget.sql.gz → lt_id → compact_id map (in-memory only)
 ///   3. Parse pagelinks.sql.gz  → write edges.tmp (flat u32 pairs)
-///   4. Two-pass CSR build:
+///   4. Three-pass CSR build:
 ///      Pass 1: count out-degree (fwd) and in-degree (bwd) from edges.tmp
-///      Pass 2: scatter-fill both CSR column arrays
+///      Pass 2: scatter-fill forward CSR column array
+///      Pass 3: scatter-fill backward CSR column array
 ///   5. Write processed binaries; delete edges.tmp
+///
+/// Forward and backward CSR columns are built in separate passes to keep
+/// peak memory roughly half of building both at once.
 use std::{
     fs::{self, File},
     io::{BufReader, BufWriter, Read, Write},
@@ -29,9 +33,27 @@ pub struct TitleIndex {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-pub fn run(downloads_dir: &Path, output_dir: &Path) {
+pub fn run(downloads_dir: &Path, output_dir: &Path, delete_dumps: bool) {
     fs::create_dir_all(output_dir)
         .unwrap_or_else(|e| panic!("Cannot create output dir {:?}: {}", output_dir, e));
+
+    let edges_path = output_dir.join("edges.tmp");
+    let title_index_path = output_dir.join("title_index.bin");
+
+    // ── Resume path: if edges.tmp and title_index.bin already exist, skip all
+    // parsing and go straight to CSR construction. This avoids re-downloading the
+    // large .gz dumps when a previous build was killed during CSR construction.
+    if edges_path.exists() && title_index_path.exists() {
+        println!("  Resuming from existing edges.tmp and title_index.bin");
+        let num_nodes = load_title_index(output_dir).titles.len() as u32;
+        let num_edges = edges_path
+            .metadata()
+            .unwrap_or_else(|e| panic!("Cannot stat {:?}: {}", edges_path, e))
+            .len()
+            / 8;
+        build_csr(output_dir, &edges_path, num_nodes, num_edges);
+        return;
+    }
 
     // ── Step 1: parse page dump ───────────────────────────────────────────────
     let page_path = downloads_dir.join("enwiki-latest-page.sql.gz");
@@ -52,6 +74,7 @@ pub fn run(downloads_dir: &Path, output_dir: &Path) {
     };
     write_bincode(output_dir.join("title_index.bin"), &title_index);
     println!("  Wrote title_index.bin");
+    maybe_delete_dump(&page_path, delete_dumps);
 
     // ── Step 2: parse linktarget dump ─────────────────────────────────────────
     let lt_path = downloads_dir.join("enwiki-latest-linktarget.sql.gz");
@@ -62,6 +85,7 @@ pub fn run(downloads_dir: &Path, output_dir: &Path) {
     );
     let lt_to_cid = parse::linktarget::parse(&lt_path, &page_index.title_to_cid);
     println!("  Link targets mapped: {}", lt_to_cid.len());
+    maybe_delete_dump(&lt_path, delete_dumps);
 
     // ── Step 3: parse pagelinks, write edges.tmp ──────────────────────────────
     let pl_path = downloads_dir.join("enwiki-latest-pagelinks.sql.gz");
@@ -70,7 +94,6 @@ pub fn run(downloads_dir: &Path, output_dir: &Path) {
         "Missing: {}",
         pl_path.display()
     );
-    let edges_path = output_dir.join("edges.tmp");
     let num_edges = parse::pagelinks::parse_and_write(
         &pl_path,
         &edges_path,
@@ -78,16 +101,22 @@ pub fn run(downloads_dir: &Path, output_dir: &Path) {
         &lt_to_cid,
     );
     println!("  Edges written: {}", num_edges);
+    maybe_delete_dump(&pl_path, delete_dumps);
 
     // Free the big maps — we don't need them anymore.
     drop(lt_to_cid);
     drop(page_index.wiki_id_to_cid);
 
-    // ── Step 4: two-pass CSR construction ─────────────────────────────────────
+    build_csr(output_dir, &edges_path, num_nodes, num_edges);
+}
+
+/// Build CSR binaries from a complete `edges.tmp` file and delete it when done.
+fn build_csr(output_dir: &Path, edges_path: &Path, num_nodes: u32, num_edges: u64) {
+    // ── Pass 1: count degrees ─────────────────────────────────────
     println!("  Building CSR (pass 1: degree counting) …");
     let mut fwd_degree = vec![0u32; num_nodes as usize + 1];
     let mut bwd_degree = vec![0u32; num_nodes as usize + 1];
-    stream_edges(&edges_path, num_edges, |src, dst| {
+    stream_edges(edges_path, num_edges, |src, dst| {
         fwd_degree[src as usize] += 1;
         bwd_degree[dst as usize] += 1;
     });
@@ -96,42 +125,39 @@ pub fn run(downloads_dir: &Path, output_dir: &Path) {
     let fwd_offsets = degree_to_offsets(fwd_degree);
     let bwd_offsets = degree_to_offsets(bwd_degree);
 
-    println!("  Building CSR (pass 2: scatter fill) …");
-    // Allocate column arrays
-    let mut fwd_columns = vec![0u32; num_edges as usize];
-    let mut bwd_columns = vec![0u32; num_edges as usize];
-
-    // cursors: position within each node's slot in the columns array
-    let mut fwd_cursor: Vec<u64> = fwd_offsets[..fwd_offsets.len() - 1].to_vec();
-    let mut bwd_cursor: Vec<u64> = bwd_offsets[..bwd_offsets.len() - 1].to_vec();
-
-    stream_edges(&edges_path, num_edges, |src, dst| {
-        let fi = fwd_cursor[src as usize] as usize;
-        fwd_columns[fi] = dst;
-        fwd_cursor[src as usize] += 1;
-
-        let bi = bwd_cursor[dst as usize] as usize;
-        bwd_columns[bi] = src;
-        bwd_cursor[dst as usize] += 1;
-    });
-
-    drop(fwd_cursor);
-    drop(bwd_cursor);
-
-    // ── Step 5: write CSR binaries ────────────────────────────────────────────
-    println!("  Writing CSR binaries …");
+    // Write small offsets files early.
+    println!("  Writing CSR offsets …");
     write_u64_array(output_dir.join("fwd_offsets.bin"), &fwd_offsets);
-    drop(fwd_offsets);
-    write_u32_array(output_dir.join("fwd_columns.bin"), &fwd_columns);
-    drop(fwd_columns);
-
     write_u64_array(output_dir.join("bwd_offsets.bin"), &bwd_offsets);
-    drop(bwd_offsets);
-    write_u32_array(output_dir.join("bwd_columns.bin"), &bwd_columns);
-    drop(bwd_columns);
+
+    // Pass 2: build forward columns only (one big array at a time).
+    println!("  Building CSR (pass 2: scatter fill forward) …");
+    {
+        let mut fwd_columns = vec![0u32; num_edges as usize];
+        let mut fwd_cursor: Vec<u64> = fwd_offsets[..fwd_offsets.len() - 1].to_vec();
+        stream_edges(edges_path, num_edges, |src, dst| {
+            let fi = fwd_cursor[src as usize] as usize;
+            fwd_columns[fi] = dst;
+            fwd_cursor[src as usize] += 1;
+        });
+        write_u32_array(output_dir.join("fwd_columns.bin"), &fwd_columns);
+    } // fwd_columns dropped here
+
+    // Pass 3: build backward columns only.
+    println!("  Building CSR (pass 3: scatter fill backward) …");
+    {
+        let mut bwd_columns = vec![0u32; num_edges as usize];
+        let mut bwd_cursor: Vec<u64> = bwd_offsets[..bwd_offsets.len() - 1].to_vec();
+        stream_edges(edges_path, num_edges, |src, dst| {
+            let bi = bwd_cursor[dst as usize] as usize;
+            bwd_columns[bi] = src;
+            bwd_cursor[dst as usize] += 1;
+        });
+        write_u32_array(output_dir.join("bwd_columns.bin"), &bwd_columns);
+    } // bwd_columns dropped here
 
     // Delete temporary edge file
-    fs::remove_file(&edges_path).ok();
+    fs::remove_file(edges_path).ok();
     println!("  Deleted edges.tmp");
     println!("Build complete. Processed files are in {:?}", output_dir);
 }
@@ -186,6 +212,15 @@ fn write_bincode<T: Serialize>(path: PathBuf, value: &T) {
     bincode::serialize_into(w, value).unwrap_or_else(|e| panic!("bincode error: {}", e));
 }
 
+fn load_title_index(output_dir: &Path) -> TitleIndex {
+    let path = output_dir.join("title_index.bin");
+    let f = File::open(&path)
+        .unwrap_or_else(|e| panic!("Cannot open {:?}: {}", path, e));
+    let r = BufReader::new(f);
+    bincode::deserialize_from(r)
+        .unwrap_or_else(|e| panic!("Failed to deserialize title_index.bin: {}", e))
+}
+
 fn write_u64_array(path: PathBuf, arr: &[u64]) {
     let f = File::create(&path).unwrap_or_else(|e| panic!("Cannot create {:?}: {}", path, e));
     let mut w = BufWriter::with_capacity(16 * 1024 * 1024, f);
@@ -199,5 +234,15 @@ fn write_u32_array(path: PathBuf, arr: &[u32]) {
     let mut w = BufWriter::with_capacity(64 * 1024 * 1024, f);
     for &v in arr {
         w.write_all(&v.to_le_bytes()).expect("write u32");
+    }
+}
+
+fn maybe_delete_dump(path: &Path, delete: bool) {
+    if delete {
+        if let Err(e) = fs::remove_file(path) {
+            eprintln!("  Warning: could not delete {:?}: {}", path, e);
+        } else {
+            println!("  Deleted {:?}", path);
+        }
     }
 }

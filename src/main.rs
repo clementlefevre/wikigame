@@ -46,6 +46,10 @@ enum Commands {
         /// Skip downloading even if dump files are absent (fail instead).
         #[arg(long)]
         no_download: bool,
+
+        /// Keep the downloaded .sql.gz files after parsing (they consume ~10 GB).
+        #[arg(long)]
+        keep_dumps: bool,
     },
 
     /// Find the shortest path between two Wikipedia articles.
@@ -96,6 +100,7 @@ fn main() {
             downloads,
             output,
             no_download,
+            keep_dumps,
         } => {
             println!("=== wikigame build ===");
             if !no_download && !download::all_present(&downloads) {
@@ -106,7 +111,7 @@ fn main() {
                     .unwrap()
                     .block_on(download::download_all(&downloads));
             }
-            build_cmd::run(&downloads, &output);
+            build_cmd::run(&downloads, &output, !keep_dumps);
         }
 
         Commands::Search {
