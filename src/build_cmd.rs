@@ -6,13 +6,14 @@
 ///   3. Parse pagelinks.sql.gz  → write edges.tmp (flat u32 pairs)
 ///   4. Three-pass CSR build:
 ///      Pass 1: count out-degree (fwd) and in-degree (bwd) from edges.tmp
-///      Pass 2: scatter-fill forward CSR column file (memory-mapped)
-///      Pass 3: scatter-fill backward CSR column file (memory-mapped)
+///      Pass 2: scatter-fill forward CSR column array
+///      Pass 3: scatter-fill backward CSR column array
 ///   5. Write processed binaries; delete edges.tmp
 ///
-/// The forward and backward CSR column arrays are built in separate passes and
-/// memory-mapped to files, so peak resident memory stays well under 1 GB even
-/// for graphs with hundreds of millions of edges.
+/// The forward and backward CSR column arrays are built in separate passes so
+/// only one ~2.6 GB allocation is live at a time. Each array is pre-touched
+/// sequentially to force eager page allocation, avoiding random page faults
+/// during the scatter-fill pass.
 use std::{
     fs::{self, File},
     io::{BufReader, BufWriter, Read, Write},
@@ -20,7 +21,6 @@ use std::{
 };
 
 use indicatif::{ProgressBar, ProgressStyle};
-use memmap2::{MmapMut, MmapOptions};
 use serde::{Deserialize, Serialize};
 
 use crate::parse;
@@ -132,33 +132,33 @@ fn build_csr(output_dir: &Path, edges_path: &Path, num_nodes: u32, num_edges: u6
     write_u64_array(output_dir.join("fwd_offsets.bin"), &fwd_offsets);
     write_u64_array(output_dir.join("bwd_offsets.bin"), &bwd_offsets);
 
-    // Pass 2: build forward columns via memory-mapped file.
+    // Pass 2: build forward columns only (one big array at a time).
     println!("  Building CSR (pass 2: scatter fill forward) …");
     {
-        let mut mmap = mmap_column_file(output_dir.join("fwd_columns.bin"), num_edges);
-        let fwd_columns = mmap_as_u32_slice_mut(&mut mmap);
+        let mut fwd_columns = vec![0u32; num_edges as usize];
+        pre_touch_pages(&mut fwd_columns);
         let mut fwd_cursor: Vec<u64> = fwd_offsets[..fwd_offsets.len() - 1].to_vec();
         stream_edges(edges_path, num_edges, |src, dst| {
             let fi = fwd_cursor[src as usize] as usize;
             fwd_columns[fi] = dst;
             fwd_cursor[src as usize] += 1;
         });
-        mmap.flush().unwrap_or_else(|e| panic!("Cannot flush fwd_columns.bin: {}", e));
-    }
+        write_u32_array(output_dir.join("fwd_columns.bin"), &fwd_columns);
+    } // fwd_columns dropped here
 
-    // Pass 3: build backward columns via memory-mapped file.
+    // Pass 3: build backward columns only.
     println!("  Building CSR (pass 3: scatter fill backward) …");
     {
-        let mut mmap = mmap_column_file(output_dir.join("bwd_columns.bin"), num_edges);
-        let bwd_columns = mmap_as_u32_slice_mut(&mut mmap);
+        let mut bwd_columns = vec![0u32; num_edges as usize];
+        pre_touch_pages(&mut bwd_columns);
         let mut bwd_cursor: Vec<u64> = bwd_offsets[..bwd_offsets.len() - 1].to_vec();
         stream_edges(edges_path, num_edges, |src, dst| {
             let bi = bwd_cursor[dst as usize] as usize;
             bwd_columns[bi] = src;
             bwd_cursor[dst as usize] += 1;
         });
-        mmap.flush().unwrap_or_else(|e| panic!("Cannot flush bwd_columns.bin: {}", e));
-    }
+        write_u32_array(output_dir.join("bwd_columns.bin"), &bwd_columns);
+    } // bwd_columns dropped here
 
     // Delete temporary edge file
     fs::remove_file(edges_path).ok();
@@ -233,6 +233,14 @@ fn write_u64_array(path: PathBuf, arr: &[u64]) {
     }
 }
 
+fn write_u32_array(path: PathBuf, arr: &[u32]) {
+    let f = File::create(&path).unwrap_or_else(|e| panic!("Cannot create {:?}: {}", path, e));
+    let mut w = BufWriter::with_capacity(64 * 1024 * 1024, f);
+    for &v in arr {
+        w.write_all(&v.to_le_bytes()).expect("write u32");
+    }
+}
+
 fn maybe_delete_dump(path: &Path, delete: bool) {
     if delete {
         if let Err(e) = fs::remove_file(path) {
@@ -243,25 +251,18 @@ fn maybe_delete_dump(path: &Path, delete: bool) {
     }
 }
 
-/// Create a writable memory map for a column file of `num_edges` u32 values.
-fn mmap_column_file(path: PathBuf, num_edges: u64) -> MmapMut {
-    let file = File::create(&path).unwrap_or_else(|e| panic!("Cannot create {:?}: {}", path, e));
-    let bytes = num_edges
-        .checked_mul(4)
-        .unwrap_or_else(|| panic!("Column file size overflow for {:?}", path));
-    file.set_len(bytes)
-        .unwrap_or_else(|e| panic!("Cannot set length for {:?}: {}", path, e));
-    unsafe {
-        MmapOptions::new()
-            .len(bytes as usize)
-            .map_mut(&file)
-            .unwrap_or_else(|e| panic!("Cannot mmap {:?}: {}", path, e))
+/// Touch one element in every 4 KB page of the buffer so the OS allocates
+/// physical pages eagerly. This avoids expensive page faults during the
+/// subsequent random-access scatter fill.
+fn pre_touch_pages(buf: &mut [u32]) {
+    let page_u32s = 4096 / std::mem::size_of::<u32>(); // 1024
+    let mut touched = 0usize;
+    for i in (0..buf.len()).step_by(page_u32s) {
+        buf[i] = 0;
+        touched += 1;
+        if touched % 100_000 == 0 {
+            eprintln!("  [pre-touch] {} / {} pages", touched, (buf.len() + page_u32s - 1) / page_u32s);
+        }
     }
-}
-
-/// View a mutable mmap as a slice of u32. The mmap length must be a multiple of 4.
-fn mmap_as_u32_slice_mut(mmap: &mut MmapMut) -> &mut [u32] {
-    let ptr = mmap.as_mut_ptr() as *mut u32;
-    let len = mmap.len() / 4;
-    unsafe { std::slice::from_raw_parts_mut(ptr, len) }
+    eprintln!("  [pre-touch] done, {} pages", touched);
 }
