@@ -31,11 +31,31 @@ struct SearchRequest {
     to: String,
 }
 
+#[derive(Deserialize)]
+struct NeighborsRequest {
+    title: String,
+    #[serde(default = "default_neighbor_limit")]
+    limit: usize,
+}
+
+fn default_neighbor_limit() -> usize {
+    40
+}
+
 #[derive(Serialize)]
 struct SearchResponse {
     path: Vec<String>,
     hops: usize,
     ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[derive(Serialize)]
+struct NeighborsResponse {
+    title: String,
+    total: usize,
+    neighbors: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
 }
@@ -46,6 +66,7 @@ pub async fn serve(port: u16, graph: LoadedGraph, titles: TitleIndex) {
     let app = Router::new()
         .route("/", get(index_handler))
         .route("/search", post(search_handler))
+        .route("/neighbors", post(neighbors_handler))
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -130,4 +151,54 @@ async fn search_handler(
             }),
         ),
     }
+}
+
+async fn neighbors_handler(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<NeighborsRequest>,
+) -> impl IntoResponse {
+    let key = req.title.replace(' ', "_");
+    let title_for_response = req.title.clone();
+
+    let cid = match state.titles.title_to_cid.get(&key) {
+        Some(&c) => c,
+        None => {
+            return (
+                StatusCode::OK,
+                Json(NeighborsResponse {
+                    title: title_for_response,
+                    total: 0,
+                    neighbors: vec![],
+                    error: Some(format!("Article not found: \"{}\"", req.title)),
+                }),
+            );
+        }
+    };
+
+    // Gather outbound neighbor titles, capped to `limit`.
+    let neighbors_raw = state.graph.forward.neighbors(cid);
+    let total = neighbors_raw.len();
+    let limit = req.limit.max(1).min(500);
+    let neighbors: Vec<String> = neighbors_raw
+        .iter()
+        .take(limit)
+        .map(|&n| {
+            state
+                .titles
+                .titles
+                .get(n as usize)
+                .cloned()
+                .unwrap_or_else(|| format!("#{}", n))
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(NeighborsResponse {
+            title: req.title,
+            total,
+            neighbors,
+            error: None,
+        }),
+    )
 }

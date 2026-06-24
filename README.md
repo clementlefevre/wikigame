@@ -34,6 +34,8 @@ cargo build --release
 ./target/release/wikigame serve
 ```
 
+The web UI shows the shortest path as an interactive 3-D scene. Path nodes are drawn in blue, and a cloud of neighboring articles (up to a configurable limit) is drawn in purple around each path node.
+
 ## Commands
 
 | Command | Description |
@@ -42,6 +44,13 @@ cargo build --release
 | `build [--downloads <dir>] [--output <dir>] [--no-download] [--keep-dumps]` | Parse dumps and write binary graph files. Use `--keep-dumps` to keep the raw `.sql.gz` files after building. |
 | `search <from> <to> [-i] [--data <dir>]` | Find the shortest path between two articles. Pass `-i` to keep the graph in memory for repeated queries. |
 | `serve [--port <port>] [--data <dir>]` | Start the local web server (default port 8080). |
+
+## API endpoints (used by the web UI)
+
+| Endpoint | Method | Body | Response |
+|---|---|---|---|
+| `/search` | POST | `{ "from": "...", "to": "..." }` | `{ "path": [...], "hops": N, "ms": N, "error?": "..." }` |
+| `/neighbors` | POST | `{ "title": "...", "limit": 30 }` | `{ "title": "...", "total": N, "neighbors": [...], "error?": "..." }` |
 
 ## Resuming a failed build
 

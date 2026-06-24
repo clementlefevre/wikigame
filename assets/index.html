@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Wikipedia Golf</title>
+    <title>Wikipedia Golf — 3D</title>
     <style>
         *,
         *::before,
@@ -14,22 +14,62 @@
             padding: 0;
         }
 
+        html,
         body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
             font-family: system-ui, -apple-system, sans-serif;
-            background: #0f172a;
+            background: #0b1021;
             color: #e2e8f0;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start;
-            padding: 3rem 1rem;
+        }
+
+        #canvas-container {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+        }
+
+        .panel {
+            position: absolute;
+            z-index: 10;
+            background: rgba(15, 23, 42, 0.92);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 1rem;
+            padding: 1.25rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        #search-panel {
+            top: 1rem;
+            left: 1rem;
+            width: 320px;
+        }
+
+        #info-panel {
+            top: 1rem;
+            right: 1rem;
+            width: 300px;
+            max-height: calc(100vh - 2rem);
+            overflow-y: auto;
+            display: none;
+        }
+
+        #controls-panel {
+            bottom: 1rem;
+            left: 1rem;
+            width: 320px;
+            padding-bottom: 1rem;
         }
 
         h1 {
-            font-size: 2.5rem;
+            font-size: 1.4rem;
             font-weight: 800;
             margin-bottom: 0.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
         h1 span {
@@ -38,40 +78,32 @@
 
         .subtitle {
             color: #94a3b8;
-            margin-bottom: 2.5rem;
-            font-size: 1rem;
-        }
-
-        .card {
-            background: #1e293b;
-            border-radius: 1rem;
-            padding: 2rem;
-            width: 100%;
-            max-width: 560px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, .5);
+            font-size: 0.8rem;
+            margin-bottom: 1rem;
         }
 
         label {
             display: block;
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             color: #94a3b8;
-            margin-bottom: 0.375rem;
+            margin-bottom: 0.25rem;
         }
 
-        input[type=text] {
+        input[type=text],
+        input[type=number] {
             width: 100%;
-            background: #0f172a;
+            background: rgba(30, 41, 59, 0.8);
             border: 1px solid #334155;
             border-radius: 0.5rem;
-            padding: 0.6rem 0.9rem;
+            padding: 0.5rem 0.75rem;
             color: #e2e8f0;
-            font-size: 1rem;
+            font-size: 0.9rem;
             outline: none;
-            transition: border-color .15s;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
         }
 
-        input[type=text]:focus {
+        input[type=text]:focus,
+        input[type=number]:focus {
             border-color: #38bdf8;
         }
 
@@ -81,11 +113,11 @@
             color: #0f172a;
             border: none;
             border-radius: 0.5rem;
-            padding: 0.7rem 1rem;
-            font-size: 1rem;
+            padding: 0.6rem 1rem;
+            font-size: 0.9rem;
             font-weight: 700;
             cursor: pointer;
-            transition: background .15s;
+            transition: background 0.15s;
         }
 
         button:hover {
@@ -98,79 +130,129 @@
             cursor: not-allowed;
         }
 
-        #result {
-            margin-top: 2rem;
+        button.secondary {
+            background: transparent;
+            border: 1px solid #38bdf8;
+            color: #38bdf8;
+            margin-top: 0.5rem;
+        }
+
+        button.secondary:hover {
+            background: rgba(56, 189, 248, 0.1);
         }
 
         .error {
             color: #f87171;
-            font-size: 0.9rem;
-            text-align: center;
+            font-size: 0.85rem;
+            margin-top: 0.75rem;
         }
 
         .meta {
             color: #94a3b8;
-            font-size: 0.85rem;
-            text-align: center;
-            margin-bottom: 1rem;
+            font-size: 0.8rem;
+            margin-bottom: 0.75rem;
         }
 
-        .path {
+        .path-list {
             list-style: none;
         }
 
-        .path li {
+        .path-list li {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            padding: 0.6rem 0.75rem;
-            border-radius: 0.5rem;
-            transition: background .1s;
+            padding: 0.45rem 0.5rem;
+            border-radius: 0.4rem;
+            transition: background 0.1s;
         }
 
-        .path li:hover {
-            background: #0f172a;
+        .path-list li:hover {
+            background: rgba(56, 189, 248, 0.1);
         }
 
-        .path li+li::before {
+        .path-list li+li::before {
             content: '↓';
-            display: block;
             color: #38bdf8;
-            font-size: 1.1rem;
-            margin-bottom: -0.4rem;
-            margin-top: -0.4rem;
-            margin-left: 0.75rem;
+            margin-bottom: -0.3rem;
+            margin-top: -0.3rem;
+            margin-left: 0.5rem;
         }
 
-        .path a {
-            color: #38bdf8;
+        .path-list a {
+            color: #e2e8f0;
             text-decoration: none;
-            font-size: 1rem;
+            font-size: 0.85rem;
         }
 
-        .path a:hover {
+        .path-list a:hover {
+            color: #38bdf8;
             text-decoration: underline;
         }
 
         .hop-badge {
-            background: #0f172a;
+            background: #1e293b;
             color: #94a3b8;
-            font-size: 0.7rem;
-            padding: 0.1rem 0.4rem;
+            font-size: 0.65rem;
+            padding: 0.05rem 0.35rem;
             border-radius: 999px;
             margin-left: auto;
         }
 
+        .control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .control-row label {
+            margin: 0;
+            flex: 1;
+        }
+
+        input[type=checkbox] {
+            width: 1.1rem;
+            height: 1.1rem;
+            accent-color: #38bdf8;
+            cursor: pointer;
+        }
+
+        input[type=number] {
+            width: 80px;
+            margin: 0;
+        }
+
+        .legend {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.75rem;
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
         .spinner {
             display: inline-block;
-            width: 1.2rem;
-            height: 1.2rem;
+            width: 1rem;
+            height: 1rem;
             border: 2px solid #334155;
             border-top-color: #38bdf8;
             border-radius: 50%;
-            animation: spin .6s linear infinite;
+            animation: spin 0.6s linear infinite;
             vertical-align: middle;
-            margin-right: 0.5rem;
+            margin-right: 0.4rem;
         }
 
         @keyframes spin {
@@ -178,67 +260,429 @@
                 transform: rotate(360deg);
             }
         }
+
+        /* Three.js CSS2D labels */
+        .node-label {
+            color: #e2e8f0;
+            background: rgba(15, 23, 42, 0.85);
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.3rem;
+            font-size: 0.75rem;
+            pointer-events: none;
+            white-space: nowrap;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            transform: translate(-50%, -120%);
+        }
+
+        .tooltip {
+            position: absolute;
+            z-index: 20;
+            pointer-events: none;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            color: #e2e8f0;
+            display: none;
+            max-width: 250px;
+        }
     </style>
 </head>
 
 <body>
-    <h1>Wikipedia <span>Golf</span></h1>
-    <p class="subtitle">Find the shortest path between any two Wikipedia articles.</p>
+    <div id="canvas-container"></div>
+    <div class="tooltip" id="tooltip"></div>
 
-    <div class="card">
+    <div id="search-panel" class="panel">
+        <h1>Wiki<span>Golf</span> 3D</h1>
+        <p class="subtitle">Shortest path through Wikipedia.</p>
+
         <label for="from">From</label>
-        <input type="text" id="from" placeholder="e.g. Banana" autocomplete="off" />
-        <label for="to">To</label>
-        <input type="text" id="to" placeholder="e.g. Adolf Hitler" autocomplete="off" />
-        <button id="btn" onclick="search()">Find path</button>
+        <input type="text" id="from" placeholder="e.g. Banana" autocomplete="off" value="Banana" />
 
-        <div id="result"></div>
+        <label for="to">To</label>
+        <input type="text" id="to" placeholder="e.g. Adolf Hitler" autocomplete="off" value="Adolf Hitler" />
+
+        <button id="btn" onclick="app.search()">Find path</button>
+        <div id="search-error"></div>
     </div>
 
-    <script>
-        async function search() {
-            const btn = document.getElementById('btn');
-            const from = document.getElementById('from').value.trim();
-            const to = document.getElementById('to').value.trim();
-            const out = document.getElementById('result');
+    <div id="info-panel" class="panel">
+        <div class="meta" id="info-meta"></div>
+        <ul class="path-list" id="path-list"></ul>
+    </div>
 
-            if (!from || !to) { out.innerHTML = '<p class="error">Please fill in both fields.</p>'; return; }
+    <div id="controls-panel" class="panel">
+        <div class="control-row">
+            <label for="show-cloud">Show neighbor cloud</label>
+            <input type="checkbox" id="show-cloud" checked onchange="app.toggleCloud()" />
+        </div>
+        <div class="control-row">
+            <label for="neighbor-limit">Neighbors per node</label>
+            <input type="number" id="neighbor-limit" value="30" min="0" max="200" onchange="app.rebuildCloud()" />
+        </div>
+        <div class="control-row">
+            <label for="show-labels">Show labels</label>
+            <input type="checkbox" id="show-labels" checked onchange="app.toggleLabels()" />
+        </div>
+        <button class="secondary" onclick="app.resetCamera()">Reset camera</button>
 
-            btn.disabled = true;
-            out.innerHTML = '<p style="text-align:center;margin-top:1rem"><span class="spinner"></span>Searching…</p>';
+        <div class="legend">
+            <div class="legend-item"><span class="dot" style="background:#38bdf8"></span> Path node</div>
+            <div class="legend-item"><span class="dot" style="background:#a78bfa"></span> Neighbor</div>
+        </div>
+    </div>
 
-            try {
-                const resp = await fetch('/search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ from, to })
-                });
-                const data = await resp.json();
-
-                if (data.error) {
-                    out.innerHTML = `<p class="error">${data.error}</p>`;
-                } else {
-                    const hops = data.hops;
-                    const ms = data.ms;
-                    let html = `<p class="meta">${hops} hop${hops === 1 ? '' : 's'} &nbsp;·&nbsp; ${ms} ms</p><ul class="path">`;
-                    data.path.forEach((title, i) => {
-                        const url = 'https://en.wikipedia.org/wiki/' + encodeURIComponent(title.replace(/ /g, '_'));
-                        html += `<li><a href="${url}" target="_blank" rel="noopener">${title.replace(/_/g, ' ')}</a>
-                         <span class="hop-badge">hop ${i}</span></li>`;
-                    });
-                    html += '</ul>';
-                    out.innerHTML = html;
-                }
-            } catch (e) {
-                out.innerHTML = `<p class="error">Request failed: ${e.message}</p>`;
-            } finally {
-                btn.disabled = false;
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
             }
         }
+    </script>
 
-        // Allow Enter key
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        const app = {
+            scene: null,
+            camera: null,
+            renderer: null,
+            labelRenderer: null,
+            controls: null,
+            raycaster: new THREE.Raycaster(),
+            pointer: new THREE.Vector2(),
+            nodes: [], // { mesh, title, kind, parentIndex? }
+            edges: [],
+            labels: [],
+            cloudGroup: null,
+            pathGroup: null,
+            lastPath: [],
+            hovered: null,
+
+            async init() {
+                const container = document.getElementById('canvas-container');
+
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x0b1021);
+                this.scene.fog = new THREE.FogExp2(0x0b1021, 0.015);
+
+                this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+                this.camera.position.set(0, 0, 40);
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                container.appendChild(this.renderer.domElement);
+
+                this.labelRenderer = new CSS2DRenderer();
+                this.labelRenderer.setSize(window.innerWidth, window.innerHeight);
+                this.labelRenderer.domElement.style.position = 'absolute';
+                this.labelRenderer.domElement.style.top = '0';
+                this.labelRenderer.domElement.style.left = '0';
+                this.labelRenderer.domElement.style.pointerEvents = 'none';
+                container.appendChild(this.labelRenderer.domElement);
+
+                this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+                this.controls.dampingFactor = 0.05;
+
+                // Lights
+                const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambient);
+                const dir = new THREE.DirectionalLight(0xffffff, 1);
+                dir.position.set(10, 20, 10);
+                this.scene.add(dir);
+
+                // Groups
+                this.pathGroup = new THREE.Group();
+                this.cloudGroup = new THREE.Group();
+                this.scene.add(this.pathGroup);
+                this.scene.add(this.cloudGroup);
+
+                // Events
+                window.addEventListener('resize', () => this.onResize());
+                this.renderer.domElement.addEventListener('pointermove', (e) => this.onPointerMove(e));
+
+                // Animation loop
+                const animate = () => {
+                    requestAnimationFrame(animate);
+                    this.controls.update();
+                    this.renderer.render(this.scene, this.camera);
+                    this.labelRenderer.render(this.scene, this.camera);
+                };
+                animate();
+            },
+
+            async search() {
+                const btn = document.getElementById('btn');
+                const from = document.getElementById('from').value.trim();
+                const to = document.getElementById('to').value.trim();
+                const errorEl = document.getElementById('search-error');
+
+                if (!from || !to) {
+                    errorEl.innerHTML = '<p class="error">Please fill in both fields.</p>';
+                    return;
+                }
+
+                btn.disabled = true;
+                errorEl.innerHTML = '<p style="color:#94a3b8;margin-top:0.5rem"><span class="spinner"></span>Searching…</p>';
+
+                try {
+                    const resp = await fetch('/search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ from, to })
+                    });
+                    const data = await resp.json();
+
+                    if (data.error) {
+                        errorEl.innerHTML = `<p class="error">${data.error}</p>`;
+                        document.getElementById('info-panel').style.display = 'none';
+                    } else {
+                        errorEl.innerHTML = '';
+                        this.lastPath = data.path;
+                        this.renderPath(data.path);
+                        this.showInfo(data);
+                        await this.rebuildCloud();
+                        this.resetCameraFit();
+                    }
+                } catch (e) {
+                    errorEl.innerHTML = `<p class="error">Request failed: ${e.message}</p>`;
+                } finally {
+                    btn.disabled = false;
+                }
+            },
+
+            showInfo(data) {
+                document.getElementById('info-panel').style.display = 'block';
+                document.getElementById('info-meta').textContent = `${data.hops} hop${data.hops === 1 ? '' : 's'} · ${data.ms} ms · ${data.path.length} nodes`;
+
+                const list = document.getElementById('path-list');
+                list.innerHTML = '';
+                data.path.forEach((title, i) => {
+                    const url = 'https://en.wikipedia.org/wiki/' + encodeURIComponent(title.replace(/ /g, '_'));
+                    const li = document.createElement('li');
+                    li.innerHTML = `<a href="${url}" target="_blank" rel="noopener">${title.replace(/_/g, ' ')}</a><span class="hop-badge">hop ${i}</span>`;
+                    list.appendChild(li);
+                });
+            },
+
+            clearScene(group) {
+                while (group.children.length > 0) {
+                    const obj = group.children[0];
+                    group.remove(obj);
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) {
+                        if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                        else obj.material.dispose();
+                    }
+                }
+            },
+
+            createNode(title, position, color, kind, parentIndex = null) {
+                const geometry = new THREE.SphereGeometry(kind === 'path' ? 0.7 : 0.35, 24, 24);
+                const material = new THREE.MeshStandardMaterial({
+                    color,
+                    roughness: 0.4,
+                    metalness: 0.3,
+                    emissive: color,
+                    emissiveIntensity: 0.25
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.copy(position);
+                mesh.userData = { title, kind, parentIndex };
+
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'node-label';
+                labelDiv.textContent = title.replace(/_/g, ' ');
+                if (kind !== 'path') labelDiv.style.display = document.getElementById('show-labels').checked ? 'block' : 'none';
+                const label = new CSS2DObject(labelDiv);
+                label.position.set(0, kind === 'path' ? 0.8 : 0.5, 0);
+                mesh.add(label);
+
+                return { mesh, title, kind, parentIndex };
+            },
+
+            renderPath(path) {
+                this.clearScene(this.pathGroup);
+                this.nodes = [];
+                this.edges = [];
+
+                const count = path.length;
+                const spacing = 5;
+                const pathNodes = [];
+
+                path.forEach((title, i) => {
+                    // Layout path in a gentle 3-D arc
+                    const t = (i / Math.max(1, count - 1)) - 0.5;
+                    const x = t * spacing * (count - 1);
+                    const y = Math.sin(i * 0.8) * 2;
+                    const z = Math.cos(i * 0.6) * 2;
+                    const pos = new THREE.Vector3(x, y, z);
+
+                    const node = this.createNode(title, pos, 0x38bdf8, 'path', i);
+                    this.pathGroup.add(node.mesh);
+                    pathNodes.push(node);
+                    this.nodes.push(node);
+                });
+
+                // Connect path nodes with tubes
+                for (let i = 0; i < pathNodes.length - 1; i++) {
+                    const a = pathNodes[i].mesh.position;
+                    const b = pathNodes[i + 1].mesh.position;
+                    const dist = a.distanceTo(b);
+                    const geometry = new THREE.CylinderGeometry(0.08, 0.08, dist, 8);
+                    const material = new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.7 });
+                    const edge = new THREE.Mesh(geometry, material);
+
+                    const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
+                    edge.position.copy(mid);
+                    edge.lookAt(b);
+                    edge.rotateX(Math.PI / 2);
+
+                    this.pathGroup.add(edge);
+                    this.edges.push(edge);
+                }
+            },
+
+            async rebuildCloud() {
+                const showCloud = document.getElementById('show-cloud').checked;
+                this.clearScene(this.cloudGroup);
+
+                if (!showCloud || this.lastPath.length === 0) return;
+
+                const limit = parseInt(document.getElementById('neighbor-limit').value, 10) || 0;
+                if (limit <= 0) return;
+
+                // Fetch neighbors for every path node in parallel
+                const requests = this.lastPath.map(title =>
+                    fetch('/neighbors', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title, limit })
+                    }).then(r => r.json())
+                );
+
+                const results = await Promise.all(requests);
+
+                results.forEach((res, parentIndex) => {
+                    if (res.error) return;
+                    const parent = this.nodes[parentIndex];
+                    if (!parent) return;
+
+                    const center = parent.mesh.position.clone();
+                    const seen = new Set();
+
+                    res.neighbors.forEach((title, j) => {
+                        if (seen.has(title)) return;
+                        seen.add(title);
+
+                        // Spherical cloud around parent, radius grows with density
+                        const phi = Math.acos(1 - 2 * (j + 0.5) / res.neighbors.length);
+                        const theta = Math.PI * (1 + Math.sqrt(5)) * (j + 0.5);
+                        const r = 3 + Math.random() * 2;
+                        const offset = new THREE.Vector3(
+                            r * Math.sin(phi) * Math.cos(theta),
+                            r * Math.sin(phi) * Math.sin(theta),
+                            r * Math.cos(phi)
+                        );
+                        const pos = center.clone().add(offset);
+
+                        const node = this.createNode(title, pos, 0xa78bfa, 'neighbor', parentIndex);
+                        this.cloudGroup.add(node.mesh);
+                        this.nodes.push(node);
+                    });
+                });
+            },
+
+            toggleCloud() {
+                this.cloudGroup.visible = document.getElementById('show-cloud').checked;
+                if (this.cloudGroup.visible && this.cloudGroup.children.length === 0 && this.lastPath.length > 0) {
+                    this.rebuildCloud();
+                }
+            },
+
+            toggleLabels() {
+                const show = document.getElementById('show-labels').checked;
+                this.nodes.forEach(n => {
+                    if (n.kind !== 'path') {
+                        n.mesh.children.forEach(c => {
+                            if (c.element && c.element.classList.contains('node-label')) {
+                                c.element.style.display = show ? 'block' : 'none';
+                            }
+                        });
+                    }
+                });
+            },
+
+            resetCamera() {
+                this.camera.position.set(0, 0, 40);
+                this.controls.target.set(0, 0, 0);
+                this.controls.update();
+            },
+
+            resetCameraFit() {
+                if (this.nodes.length === 0) return;
+                const box = new THREE.Box3();
+                this.nodes.forEach(n => box.expandByObject(n.mesh));
+                const center = new THREE.Vector3();
+                box.getCenter(center);
+                const size = new THREE.Vector3();
+                box.getSize(size);
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const dist = Math.max(10, maxDim * 1.5);
+
+                this.controls.target.copy(center);
+                this.camera.position.set(center.x, center.y + maxDim * 0.3, center.z + dist);
+                this.controls.update();
+            },
+
+            onResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.labelRenderer.setSize(window.innerWidth, window.innerHeight);
+            },
+
+            onPointerMove(event) {
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+                this.raycaster.setFromCamera(this.pointer, this.camera);
+                const intersects = this.raycaster.intersectObjects(
+                    this.nodes.map(n => n.mesh),
+                    false
+                );
+
+                const tooltip = document.getElementById('tooltip');
+                if (intersects.length > 0) {
+                    const obj = intersects[0].object;
+                    const title = obj.userData.title.replace(/_/g, ' ');
+                    const kind = obj.userData.kind === 'path' ? 'Path node' : 'Neighbor';
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = event.clientX + 12 + 'px';
+                    tooltip.style.top = event.clientY + 12 + 'px';
+                    tooltip.innerHTML = `<strong>${kind}</strong><br>${title}`;
+                    document.body.style.cursor = 'pointer';
+                } else {
+                    tooltip.style.display = 'none';
+                    document.body.style.cursor = 'default';
+                }
+            }
+        };
+
+        app.init();
+        window.app = app; // expose for onclick handlers
+
+        // Enter key support
         ['from', 'to'].forEach(id => {
-            document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+            document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') app.search(); });
         });
     </script>
 </body>
