@@ -21,6 +21,9 @@ flate2 = "1"
 bincode = "1"
 serde = { version = "1", features = ["derive"] }
 
+# Memory-mapped output files for low-memory CSR construction
+memmap2 = "0.9"
+
 # Progress bars
 indicatif = { version = "0.17", features = ["rayon"] }
 

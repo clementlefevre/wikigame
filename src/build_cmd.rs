@@ -6,12 +6,13 @@
 ///   3. Parse pagelinks.sql.gz  → write edges.tmp (flat u32 pairs)
 ///   4. Three-pass CSR build:
 ///      Pass 1: count out-degree (fwd) and in-degree (bwd) from edges.tmp
-///      Pass 2: scatter-fill forward CSR column array
-///      Pass 3: scatter-fill backward CSR column array
+///      Pass 2: scatter-fill forward CSR column file (memory-mapped)
+///      Pass 3: scatter-fill backward CSR column file (memory-mapped)
 ///   5. Write processed binaries; delete edges.tmp
 ///
-/// Forward and backward CSR columns are built in separate passes to keep
-/// peak memory roughly half of building both at once.
+/// The forward and backward CSR column arrays are built in separate passes and
+/// memory-mapped to files, so peak resident memory stays well under 1 GB even
+/// for graphs with hundreds of millions of edges.
 use std::{
     fs::{self, File},
     io::{BufReader, BufWriter, Read, Write},
@@ -19,6 +20,7 @@ use std::{
 };
 
 use indicatif::{ProgressBar, ProgressStyle};
+use memmap2::{MmapMut, MmapOptions};
 use serde::{Deserialize, Serialize};
 
 use crate::parse;
@@ -130,36 +132,33 @@ fn build_csr(output_dir: &Path, edges_path: &Path, num_nodes: u32, num_edges: u6
     write_u64_array(output_dir.join("fwd_offsets.bin"), &fwd_offsets);
     write_u64_array(output_dir.join("bwd_offsets.bin"), &bwd_offsets);
 
-    // Pass 2: build forward columns only (one big array at a time).
-    eprintln!("  [debug] starting pass 2 (fwd)");
+    // Pass 2: build forward columns via memory-mapped file.
     println!("  Building CSR (pass 2: scatter fill forward) …");
     {
-        eprintln!("  [debug] allocating fwd_columns ({:.2} GB) ...", (num_edges as f64 * 4.0) / 1e9);
-        let t0 = std::time::Instant::now();
-        let mut fwd_columns = vec![0u32; num_edges as usize];
-        eprintln!("  [debug] allocated fwd_columns in {:?}", t0.elapsed());
+        let mut mmap = mmap_column_file(output_dir.join("fwd_columns.bin"), num_edges);
+        let fwd_columns = mmap_as_u32_slice_mut(&mut mmap);
         let mut fwd_cursor: Vec<u64> = fwd_offsets[..fwd_offsets.len() - 1].to_vec();
         stream_edges(edges_path, num_edges, |src, dst| {
             let fi = fwd_cursor[src as usize] as usize;
             fwd_columns[fi] = dst;
             fwd_cursor[src as usize] += 1;
         });
-        eprintln!("  [debug] streaming fwd done, writing file");
-        write_u32_array(output_dir.join("fwd_columns.bin"), &fwd_columns);
-    } // fwd_columns dropped here
+        mmap.flush().unwrap_or_else(|e| panic!("Cannot flush fwd_columns.bin: {}", e));
+    }
 
-    // Pass 3: build backward columns only.
+    // Pass 3: build backward columns via memory-mapped file.
     println!("  Building CSR (pass 3: scatter fill backward) …");
     {
-        let mut bwd_columns = vec![0u32; num_edges as usize];
+        let mut mmap = mmap_column_file(output_dir.join("bwd_columns.bin"), num_edges);
+        let bwd_columns = mmap_as_u32_slice_mut(&mut mmap);
         let mut bwd_cursor: Vec<u64> = bwd_offsets[..bwd_offsets.len() - 1].to_vec();
         stream_edges(edges_path, num_edges, |src, dst| {
             let bi = bwd_cursor[dst as usize] as usize;
             bwd_columns[bi] = src;
             bwd_cursor[dst as usize] += 1;
         });
-        write_u32_array(output_dir.join("bwd_columns.bin"), &bwd_columns);
-    } // bwd_columns dropped here
+        mmap.flush().unwrap_or_else(|e| panic!("Cannot flush bwd_columns.bin: {}", e));
+    }
 
     // Delete temporary edge file
     fs::remove_file(edges_path).ok();
@@ -182,7 +181,6 @@ fn stream_edges<F: FnMut(u32, u32)>(path: &Path, num_edges: u64, mut f: F) {
     let mut reader = BufReader::with_capacity(32 * 1024 * 1024, file);
     let mut buf = [0u8; 8];
     let mut count = 0u64;
-    let t0 = std::time::Instant::now();
 
     loop {
         match reader.read_exact(&mut buf) {
@@ -196,10 +194,8 @@ fn stream_edges<F: FnMut(u32, u32)>(path: &Path, num_edges: u64, mut f: F) {
         count += 1;
         if count % 10_000_000 == 0 {
             pb.set_position(count);
-            eprintln!("  [debug] streamed {}M edges, elapsed {:?}", count / 1_000_000, t0.elapsed());
         }
     }
-    eprintln!("  [debug] stream complete: {} edges in {:?}", count, t0.elapsed());
     pb.finish_with_message(format!("Streamed {} edges", count));
 }
 
@@ -237,14 +233,6 @@ fn write_u64_array(path: PathBuf, arr: &[u64]) {
     }
 }
 
-fn write_u32_array(path: PathBuf, arr: &[u32]) {
-    let f = File::create(&path).unwrap_or_else(|e| panic!("Cannot create {:?}: {}", path, e));
-    let mut w = BufWriter::with_capacity(64 * 1024 * 1024, f);
-    for &v in arr {
-        w.write_all(&v.to_le_bytes()).expect("write u32");
-    }
-}
-
 fn maybe_delete_dump(path: &Path, delete: bool) {
     if delete {
         if let Err(e) = fs::remove_file(path) {
@@ -253,4 +241,27 @@ fn maybe_delete_dump(path: &Path, delete: bool) {
             println!("  Deleted {:?}", path);
         }
     }
+}
+
+/// Create a writable memory map for a column file of `num_edges` u32 values.
+fn mmap_column_file(path: PathBuf, num_edges: u64) -> MmapMut {
+    let file = File::create(&path).unwrap_or_else(|e| panic!("Cannot create {:?}: {}", path, e));
+    let bytes = num_edges
+        .checked_mul(4)
+        .unwrap_or_else(|| panic!("Column file size overflow for {:?}", path));
+    file.set_len(bytes)
+        .unwrap_or_else(|e| panic!("Cannot set length for {:?}: {}", path, e));
+    unsafe {
+        MmapOptions::new()
+            .len(bytes as usize)
+            .map_mut(&file)
+            .unwrap_or_else(|e| panic!("Cannot mmap {:?}: {}", path, e))
+    }
+}
+
+/// View a mutable mmap as a slice of u32. The mmap length must be a multiple of 4.
+fn mmap_as_u32_slice_mut(mmap: &mut MmapMut) -> &mut [u32] {
+    let ptr = mmap.as_mut_ptr() as *mut u32;
+    let len = mmap.len() / 4;
+    unsafe { std::slice::from_raw_parts_mut(ptr, len) }
 }
