@@ -103,13 +103,20 @@ fn main() {
             keep_dumps,
         } => {
             println!("=== wikigame build ===");
-            if !no_download && !download::all_present(&downloads) {
-                println!("Dump files not found in {:?}. Downloading now ...", downloads);
-                tokio::runtime::Builder::new_multi_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap()
-                    .block_on(download::download_all(&downloads));
+            // If a previous build produced edges.tmp + title_index.bin, resume
+            // from CSR construction instead of re-downloading the dumps.
+            let can_resume = output.join("edges.tmp").exists() && output.join("title_index.bin").exists();
+            if !can_resume {
+                if !no_download && !download::all_present(&downloads) {
+                    println!("Dump files not found in {:?}. Downloading now ...", downloads);
+                    tokio::runtime::Builder::new_multi_thread()
+                        .enable_all()
+                        .build()
+                        .unwrap()
+                        .block_on(download::download_all(&downloads));
+                }
+            } else {
+                println!("Found existing edges.tmp and title_index.bin; resuming CSR construction.");
             }
             build_cmd::run(&downloads, &output, !keep_dumps);
         }

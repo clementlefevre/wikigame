@@ -131,15 +131,20 @@ fn build_csr(output_dir: &Path, edges_path: &Path, num_nodes: u32, num_edges: u6
     write_u64_array(output_dir.join("bwd_offsets.bin"), &bwd_offsets);
 
     // Pass 2: build forward columns only (one big array at a time).
+    eprintln!("  [debug] starting pass 2 (fwd)");
     println!("  Building CSR (pass 2: scatter fill forward) …");
     {
+        eprintln!("  [debug] allocating fwd_columns ({:.2} GB) ...", (num_edges as f64 * 4.0) / 1e9);
+        let t0 = std::time::Instant::now();
         let mut fwd_columns = vec![0u32; num_edges as usize];
+        eprintln!("  [debug] allocated fwd_columns in {:?}", t0.elapsed());
         let mut fwd_cursor: Vec<u64> = fwd_offsets[..fwd_offsets.len() - 1].to_vec();
         stream_edges(edges_path, num_edges, |src, dst| {
             let fi = fwd_cursor[src as usize] as usize;
             fwd_columns[fi] = dst;
             fwd_cursor[src as usize] += 1;
         });
+        eprintln!("  [debug] streaming fwd done, writing file");
         write_u32_array(output_dir.join("fwd_columns.bin"), &fwd_columns);
     } // fwd_columns dropped here
 
@@ -177,6 +182,7 @@ fn stream_edges<F: FnMut(u32, u32)>(path: &Path, num_edges: u64, mut f: F) {
     let mut reader = BufReader::with_capacity(32 * 1024 * 1024, file);
     let mut buf = [0u8; 8];
     let mut count = 0u64;
+    let t0 = std::time::Instant::now();
 
     loop {
         match reader.read_exact(&mut buf) {
@@ -190,8 +196,10 @@ fn stream_edges<F: FnMut(u32, u32)>(path: &Path, num_edges: u64, mut f: F) {
         count += 1;
         if count % 10_000_000 == 0 {
             pb.set_position(count);
+            eprintln!("  [debug] streamed {}M edges, elapsed {:?}", count / 1_000_000, t0.elapsed());
         }
     }
+    eprintln!("  [debug] stream complete: {} edges in {:?}", count, t0.elapsed());
     pb.finish_with_message(format!("Streamed {} edges", count));
 }
 
