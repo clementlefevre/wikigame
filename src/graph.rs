@@ -47,21 +47,11 @@ impl WikiCsr {
             &columns[start..end]
         }
     }
-
-    pub fn node_count(&self) -> usize {
-        (self.offsets_mmap.len() / 8).saturating_sub(1)
-    }
-
-    pub fn edge_count(&self) -> usize {
-        self.columns_mmap.len() / 4
-    }
 }
 
 pub struct LoadedGraph {
     pub forward: WikiCsr,
     pub backward: WikiCsr,
-    pub num_nodes: u32,
-    pub num_edges: u64,
 }
 
 pub fn load(data_dir: &Path) -> LoadedGraph {
@@ -77,13 +67,13 @@ pub fn load(data_dir: &Path) -> LoadedGraph {
     let forward = WikiCsr::new(fwd_off, fwd_col);
     let backward = WikiCsr::new(bwd_off, bwd_col);
 
-    let num_nodes = forward.node_count() as u32;
-    let num_edges = forward.edge_count() as u64;
+    let num_nodes = (forward.offsets_mmap.len() / 8).saturating_sub(1) as u32;
+    let num_edges = forward.columns_mmap.len() as u64 / 4;
 
     println!("  Nodes: {}   Edges: {}", num_nodes, num_edges);
     println!("  Graphs loaded in {:.1}s", t0.elapsed().as_secs_f64());
 
-    LoadedGraph { forward, backward, num_nodes, num_edges }
+    LoadedGraph { forward, backward }
 }
 
 // ── I/O helpers ─────────────────────────────────────────────────────────────────

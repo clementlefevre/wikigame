@@ -256,13 +256,7 @@ fn maybe_delete_dump(path: &Path, delete: bool) {
 /// subsequent random-access scatter fill.
 fn pre_touch_pages(buf: &mut [u32]) {
     let page_u32s = 4096 / std::mem::size_of::<u32>(); // 1024
-    let mut touched = 0usize;
     for i in (0..buf.len()).step_by(page_u32s) {
         buf[i] = 0;
-        touched += 1;
-        if touched % 100_000 == 0 {
-            eprintln!("  [pre-touch] {} / {} pages", touched, (buf.len() + page_u32s - 1) / page_u32s);
-        }
     }
-    eprintln!("  [pre-touch] done, {} pages", touched);
 }
