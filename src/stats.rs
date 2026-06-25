@@ -1,5 +1,5 @@
-/// Graph analytics: degree-based "top pages" stats and a hop-distance
-/// distribution histogram.
+/// Graph analytics: degree-based "top pages" stats, degree distribution,
+/// dead-end / orphan counts, and a hop-distance distribution histogram.
 ///
 /// Everything here runs on the memory-mapped CSR graphs and is O(V + E) or
 /// cheaper. Results are serialised by `web.rs` and cached inside `AppState`
@@ -25,13 +25,27 @@ pub struct HopBucket {
     pub count: usize,
 }
 
+/// Bucket of the degree-distribution histogram (power-law buckets).
+#[derive(Serialize, Clone)]
+pub struct DegreeBucket {
+    pub range: String,
+    pub count: u64,
+}
+
 /// Full stats payload served by `GET /api/stats`.
 #[derive(Serialize, Clone, Default)]
 pub struct GraphStats {
     pub num_nodes: u64,
     pub num_edges: u64,
+    pub density: f64,
+    pub avg_degree: f64,
+    pub dead_ends: u64,
+    pub orphans: u64,
+    pub self_loops: u64,
+    pub degree_distribution: Vec<DegreeBucket>,
     pub top_in_degree: Vec<PageStat>,
     pub top_out_degree: Vec<PageStat>,
+    pub top_dead_ends: Vec<PageStat>,
     pub hop_distribution: Vec<HopBucket>,
 }
 
@@ -47,16 +61,37 @@ pub fn compute(graph: &LoadedGraph, titles: &[String]) -> GraphStats {
     let num_nodes = node_count(&graph.forward);
     let num_edges = edge_count(&graph.forward);
 
+    let density = if num_nodes > 1 {
+        num_edges as f64 / (num_nodes as f64 * (num_nodes as f64 - 1.0))
+    } else {
+        0.0
+    };
+    let avg_degree = if num_nodes > 0 {
+        num_edges as f64 / num_nodes as f64
+    } else {
+        0.0
+    };
+
     let top_in_degree = top_degree(&graph.backward, titles, TOP_N);
     let top_out_degree = top_degree(&graph.forward, titles, TOP_N);
+
+    let (dead_ends, orphans, self_loops, degree_distribution, top_dead_ends) =
+        structural_stats(graph, titles);
 
     let hop_distribution = hop_distribution(graph, &top_in_degree);
 
     GraphStats {
         num_nodes,
         num_edges,
+        density,
+        avg_degree,
+        dead_ends,
+        orphans,
+        self_loops,
+        degree_distribution,
         top_in_degree,
         top_out_degree,
+        top_dead_ends,
         hop_distribution,
     }
 }
@@ -107,6 +142,98 @@ fn top_degree(csr: &WikiCsr, titles: &[String], n: usize) -> Vec<PageStat> {
         .collect();
     out.sort_by_key(|p| std::cmp::Reverse(p.degree));
     out
+}
+
+/// Compute structural graph metrics in a single O(V+E) pass:
+///   - dead_ends: nodes with 0 out-degree (sink / dead-end articles)
+///   - orphans: nodes with 0 in-degree (nothing links to them)
+///   - self_loops: edges where src == dst (articles linking to themselves)
+///   - degree_distribution: power-law bucketed out-degree histogram
+///   - top_dead_ends: highest in-degree among dead-end nodes
+fn structural_stats(graph: &LoadedGraph, titles: &[String]) -> (u64, u64, u64, Vec<DegreeBucket>, Vec<PageStat>) {
+    let v = node_count(&graph.forward) as usize;
+
+    let mut dead_ends: u64 = 0;
+    let mut orphans: u64 = 0;
+    let mut self_loops: u64 = 0;
+
+    // Degree distribution buckets (out-degree).
+    // 0, 1, 2-5, 6-10, 11-50, 51-100, 101-500, 501+
+    let bucket_ranges = ["0", "1", "2–5", "6–10", "11–50", "51–100", "101–500", "500+"];
+    let mut buckets = [0u64; 8];
+
+    // For top dead-ends: track top-N by in-degree among 0-out-degree nodes.
+    let mut dead_end_heap: std::collections::BinaryHeap<std::cmp::Reverse<(usize, u32)>> =
+        std::collections::BinaryHeap::with_capacity(TOP_N + 1);
+
+    for cid in 0..v as u32 {
+        let out_deg = graph.forward.neighbors(cid).len();
+        let in_deg = graph.backward.neighbors(cid).len();
+
+        if out_deg == 0 {
+            dead_ends += 1;
+            // Track top dead-ends by in-degree
+            if in_deg > 0 {
+                if dead_end_heap.len() < TOP_N {
+                    dead_end_heap.push(std::cmp::Reverse((in_deg, cid)));
+                } else if let Some(&std::cmp::Reverse((min_deg, _))) = dead_end_heap.peek() {
+                    if in_deg > min_deg {
+                        dead_end_heap.pop();
+                        dead_end_heap.push(std::cmp::Reverse((in_deg, cid)));
+                    }
+                }
+            }
+        }
+
+        if in_deg == 0 {
+            orphans += 1;
+        }
+
+        // Self-loops
+        for &nb in graph.forward.neighbors(cid) {
+            if nb == cid {
+                self_loops += 1;
+                break;
+            }
+        }
+
+        // Degree bucket
+        let bidx = match out_deg {
+            0 => 0,
+            1 => 1,
+            2..=5 => 2,
+            6..=10 => 3,
+            11..=50 => 4,
+            51..=100 => 5,
+            101..=500 => 6,
+            _ => 7,
+        };
+        buckets[bidx] += 1;
+    }
+
+    let degree_distribution = bucket_ranges
+        .iter()
+        .zip(buckets.iter())
+        .map(|(range, &count)| DegreeBucket {
+            range: range.to_string(),
+            count,
+        })
+        .collect();
+
+    let mut top_dead_ends: Vec<PageStat> = dead_end_heap
+        .into_iter()
+        .map(|std::cmp::Reverse((deg, cid))| PageStat {
+            title: titles
+                .get(cid as usize)
+                .cloned()
+                .unwrap_or_else(|| format!("#{}", cid)),
+            cid,
+            degree: deg,
+        })
+        .collect();
+    top_dead_ends.sort_by_key(|p| std::cmp::Reverse(p.degree));
+
+    (dead_ends, orphans, self_loops, degree_distribution, top_dead_ends)
 }
 
 /// Hop-distance histogram: run bounded single-source BFS from a handful of

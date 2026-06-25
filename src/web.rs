@@ -405,13 +405,7 @@ async fn stats_handler(State(ws): State<Arc<WebState>>) -> Response {
     // Slow path: compute on a blocking thread, then cache.
     let computed = tokio::task::spawn_blocking(move || stats::compute(&graph, &titles.titles))
         .await
-        .unwrap_or_else(|_| GraphStats {
-            num_nodes: 0,
-            num_edges: 0,
-            top_in_degree: vec![],
-            top_out_degree: vec![],
-            hop_distribution: vec![],
-        });
+        .unwrap_or_else(|_| GraphStats::default());
     let cached = Arc::new(computed);
 
     let mut guard = stats_lock.lock().await;

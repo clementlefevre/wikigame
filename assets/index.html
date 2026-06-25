@@ -17,16 +17,23 @@
         :root {
             --accent: #0A84FF;
             --accent-soft: rgba(10, 132, 255, 0.18);
+            --accent-glow: rgba(10, 132, 255, 0.35);
             --bg: #000000;
             --panel-bg: rgba(28, 28, 30, 0.72);
+            --panel-bg-solid: rgba(44, 44, 46, 0.96);
             --panel-border: rgba(255, 255, 255, 0.08);
+            --panel-border-strong: rgba(255, 255, 255, 0.12);
             --text: #f5f5f7;
             --text-dim: #98989d;
             --text-faint: #636366;
             --field-bg: rgba(118, 118, 128, 0.24);
             --field-border: rgba(255, 255, 255, 0.06);
+            --separator: rgba(84, 84, 88, 0.36);
             --shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.75);
+            --shadow-sm: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
             --radius: 14px;
+            --radius-lg: 18px;
+            --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
         }
 
         html,
@@ -38,6 +45,7 @@
             background: var(--bg);
             color: var(--text);
             -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
             text-rendering: optimizeLegibility;
         }
 
@@ -55,7 +63,7 @@
             -webkit-backdrop-filter: blur(24px) saturate(160%);
             border: 1px solid var(--panel-border);
             border-radius: var(--radius);
-            padding: 16px;
+            padding: 18px;
             box-shadow: var(--shadow);
         }
 
@@ -104,12 +112,13 @@
             color: var(--text-dim);
             border: none;
             border-radius: 999px;
-            padding: 6px 18px;
+            padding: 7px 22px;
             font-size: 0.85rem;
-            font-weight: 600;
+            font-weight: 590;
             cursor: pointer;
-            transition: background 0.18s, color 0.18s;
+            transition: background 0.2s var(--ease), color 0.2s var(--ease);
             margin: 0;
+            letter-spacing: -0.01em;
         }
 
         .tabbar button:hover {
@@ -124,7 +133,7 @@
         h1 {
             font-size: 1.35rem;
             font-weight: 700;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.022em;
             margin-bottom: 2px;
             display: flex;
             align-items: center;
@@ -138,7 +147,7 @@
         .subtitle {
             color: var(--text-dim);
             font-size: 0.78rem;
-            margin-bottom: 14px;
+            margin-bottom: 16px;
             letter-spacing: -0.01em;
         }
 
@@ -147,7 +156,7 @@
             font-size: 0.72rem;
             font-weight: 500;
             color: var(--text-dim);
-            margin-bottom: 4px;
+            margin-bottom: 5px;
             letter-spacing: 0.01em;
         }
 
@@ -157,7 +166,7 @@
             background: var(--field-bg);
             border: 1px solid var(--field-border);
             border-radius: 9px;
-            padding: 8px 11px;
+            padding: 9px 12px;
             color: var(--text);
             font-size: 0.9rem;
             outline: none;
@@ -177,11 +186,11 @@
             color: #fff;
             border: none;
             border-radius: 9px;
-            padding: 9px 14px;
+            padding: 10px 14px;
             font-size: 0.88rem;
             font-weight: 600;
             cursor: pointer;
-            transition: filter 0.15s, opacity 0.15s;
+            transition: filter 0.15s, opacity 0.15s, transform 0.1s;
         }
 
         button:hover {
@@ -190,6 +199,7 @@
 
         button:active {
             opacity: 0.8;
+            transform: scale(0.98);
         }
 
         button:disabled {
@@ -218,8 +228,10 @@
         .meta {
             color: var(--text-dim);
             font-size: 0.78rem;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             font-variant-numeric: tabular-nums;
+            padding-bottom: 10px;
+            border-bottom: 0.5px solid var(--separator);
         }
 
         .path-list {
@@ -286,7 +298,7 @@
             margin: 0;
         }
 
-        /* Apple-style toggle switch (replaces checkboxes) */
+        /* Apple-style toggle switch */
         .switch {
             position: relative;
             display: inline-block;
@@ -306,7 +318,7 @@
             inset: 0;
             background: rgba(120, 120, 128, 0.32);
             border-radius: 999px;
-            transition: background 0.2s;
+            transition: background 0.2s var(--ease);
         }
 
         .switch .track::before {
@@ -318,7 +330,7 @@
             height: 18px;
             background: #fff;
             border-radius: 50%;
-            transition: transform 0.2s ease;
+            transition: transform 0.2s var(--ease);
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         }
 
@@ -333,7 +345,9 @@
         .legend {
             display: flex;
             gap: 12px;
-            margin-top: 10px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 0.5px solid var(--separator);
             font-size: 0.72rem;
             color: var(--text-dim);
         }
@@ -368,7 +382,7 @@
             }
         }
 
-        /* Three.js CSS2D labels — no transform here; CSS2DRenderer sets it */
+        /* Three.js CSS2D labels */
         .node-label {
             color: var(--text);
             background: rgba(28, 28, 30, 0.82);
@@ -392,16 +406,17 @@
             position: absolute;
             z-index: 20;
             pointer-events: none;
-            background: rgba(28, 28, 30, 0.95);
+            background: var(--panel-bg-solid);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border: 1px solid var(--panel-border);
             border-radius: 9px;
-            padding: 7px 10px;
+            padding: 8px 11px;
             font-size: 0.78rem;
             color: var(--text);
             display: none;
             max-width: 250px;
+            box-shadow: var(--shadow-sm);
         }
 
         /* Setup wizard overlay */
@@ -427,16 +442,16 @@
             max-width: 540px;
             background: var(--panel-bg);
             border: 1px solid var(--panel-border);
-            border-radius: 18px;
-            padding: 28px;
+            border-radius: var(--radius-lg);
+            padding: 32px;
             box-shadow: var(--shadow);
             text-align: center;
         }
 
         .setup-card h2 {
-            font-size: 1.5rem;
+            font-size: 1.6rem;
             font-weight: 700;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.022em;
             margin-bottom: 6px;
         }
 
@@ -447,15 +462,15 @@
         .setup-card .setup-sub {
             color: var(--text-dim);
             font-size: 0.88rem;
-            margin-bottom: 20px;
+            margin-bottom: 22px;
             line-height: 1.5;
         }
 
         .setup-card .estimates {
             background: var(--field-bg);
             border-radius: 11px;
-            padding: 12px 14px;
-            margin-bottom: 20px;
+            padding: 14px 16px;
+            margin-bottom: 22px;
             font-size: 0.8rem;
             color: var(--text-dim);
             text-align: left;
@@ -468,11 +483,11 @@
 
         #setup-btn {
             font-size: 0.95rem;
-            padding: 11px 18px;
+            padding: 12px 18px;
         }
 
         #setup-progress {
-            margin-top: 20px;
+            margin-top: 22px;
             text-align: left;
             display: none;
         }
@@ -500,14 +515,14 @@
             height: 100%;
             width: 0%;
             background: var(--accent);
-            transition: width 0.3s ease;
+            transition: width 0.3s var(--ease);
         }
 
         .setup-log {
             background: rgba(0, 0, 0, 0.4);
             border: 1px solid var(--panel-border);
             border-radius: 8px;
-            padding: 9px 11px;
+            padding: 10px 12px;
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
             font-size: 0.72rem;
             color: var(--text-dim);
@@ -523,7 +538,8 @@
             margin-top: 10px;
         }
 
-        /* Stats view */
+        /* ── Stats view ──────────────────────────────────────────── */
+
         #stats-overlay {
             position: absolute;
             inset: 0;
@@ -532,8 +548,8 @@
             padding: 64px 16px 32px;
             display: none;
             background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
         }
 
         #stats-overlay.active {
@@ -541,7 +557,7 @@
         }
 
         .stats-inner {
-            max-width: 980px;
+            max-width: 1000px;
             margin: 0 auto;
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -558,7 +574,7 @@
             -webkit-backdrop-filter: blur(24px) saturate(160%);
             border: 1px solid var(--panel-border);
             border-radius: var(--radius);
-            padding: 18px;
+            padding: 20px;
             box-shadow: var(--shadow);
         }
 
@@ -567,39 +583,69 @@
         }
 
         .stats-card h3 {
-            font-size: 0.82rem;
+            font-size: 0.78rem;
             font-weight: 600;
             color: var(--text-dim);
             text-transform: uppercase;
-            letter-spacing: 0.04em;
-            margin-bottom: 14px;
+            letter-spacing: 0.05em;
+            margin-bottom: 16px;
         }
 
+        /* Summary cards row */
         .summary-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 12px;
         }
 
+        @media (max-width: 600px) {
+            .summary-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
         .summary-stat {
             background: var(--field-bg);
-            border-radius: 11px;
-            padding: 14px;
+            border-radius: 12px;
+            padding: 16px;
         }
 
         .summary-stat .v {
-            font-size: 1.4rem;
+            font-size: 1.5rem;
             font-weight: 700;
             letter-spacing: -0.02em;
             font-variant-numeric: tabular-nums;
+            color: var(--text);
         }
 
         .summary-stat .l {
             font-size: 0.7rem;
             color: var(--text-dim);
-            margin-top: 2px;
+            margin-top: 3px;
+            letter-spacing: 0.01em;
         }
 
+        /* Metric pills (density, avg degree, etc.) */
+        .metric-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .metric-pill {
+            background: var(--field-bg);
+            border-radius: 999px;
+            padding: 6px 14px;
+            font-size: 0.78rem;
+            color: var(--text);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .metric-pill .label {
+            color: var(--text-dim);
+            font-weight: 400;
+        }
+
+        /* Bar list (top hubs etc.) */
         .bar-row {
             display: flex;
             align-items: center;
@@ -647,10 +693,11 @@
             height: 100%;
             background: var(--accent);
             border-radius: 999px;
-            transition: width 0.4s ease;
+            transition: width 0.4s var(--ease);
         }
 
         .bar-fill.out { background: #bf5af2; }
+        .bar-fill.dead { background: #ff9f0a; }
 
         .bar-row .val {
             width: 56px;
@@ -661,6 +708,7 @@
             font-size: 0.74rem;
         }
 
+        /* Histograms */
         .hist {
             display: flex;
             align-items: flex-end;
@@ -685,13 +733,55 @@
             background: var(--accent);
             border-radius: 6px 6px 0 0;
             min-height: 2px;
-            transition: height 0.4s ease;
+            transition: height 0.4s var(--ease);
         }
 
         .hist-label {
             font-size: 0.68rem;
             color: var(--text-dim);
             font-variant-numeric: tabular-nums;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        /* Degree distribution — log-scale style with horizontal bars */
+        .deg-dist {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .deg-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.78rem;
+        }
+
+        .deg-row .deg-label {
+            width: 60px;
+            flex-shrink: 0;
+            color: var(--text-dim);
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .deg-row .bar-wrap {
+            flex: 1;
+        }
+
+        .deg-row .deg-count {
+            width: 70px;
+            flex-shrink: 0;
+            text-align: right;
+            color: var(--text-dim);
+            font-variant-numeric: tabular-nums;
+            font-size: 0.74rem;
+        }
+
+        .deg-row .bar-fill {
+            background: linear-gradient(90deg, var(--accent), #5E8C2A);
         }
 
         .stats-loading {
@@ -699,6 +789,24 @@
             padding: 40px;
             color: var(--text-dim);
             font-size: 0.9rem;
+        }
+
+        .stats-section-title {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-faint);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 18px;
+            margin-bottom: 8px;
+            padding-top: 14px;
+            border-top: 0.5px solid var(--separator);
+        }
+
+        .stats-section-title:first-of-type {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: none;
         }
 
     </style>
@@ -1101,33 +1209,72 @@
                     const h = ((b.count / max) * 100).toFixed(1);
                     return `<div class="hist-col">
                         <div class="hist-bar" style="height:${h}%"></div>
-                        <div class="hist-label">${b.hops}</div>
+                        <div class="hist-label">${b.hops === 0 ? 'seed' : b.hops + ' hop' + (b.hops > 1 ? 's' : '')}</div>
                     </div>`;
                 }).join('') + '</div>';
             },
 
+            degreeDist(buckets) {
+                if (!buckets || !buckets.length) return '<div class="stats-loading">No data.</div>';
+                const max = Math.max(...buckets.map(b => b.count), 1);
+                return '<div class="deg-dist">' + buckets.map(b => {
+                    const pct = ((b.count / max) * 100).toFixed(1);
+                    return `<div class="deg-row">
+                        <span class="deg-label">${b.range}</span>
+                        <span class="bar-wrap"><span class="bar-fill" style="width:${pct}%"></span></span>
+                        <span class="deg-count">${this.fmtNum(b.count)}</span>
+                    </div>`;
+                }).join('') + '</div>';
+            },
+
+            fmtPct(n) {
+                if (n == null || isNaN(n)) return '—';
+                if (n < 0.001) return n.toExponential(1);
+                if (n < 1) return n.toFixed(4);
+                return n.toFixed(2) + '%';
+            },
+
             renderStats(d) {
                 const content = document.getElementById('stats-content');
+                const deadEndPct = d.num_nodes > 0 ? (d.dead_ends / d.num_nodes * 100) : 0;
+                const orphanPct = d.num_nodes > 0 ? (d.orphans / d.num_nodes * 100) : 0;
+
                 content.innerHTML = `
                     <div class="stats-card full">
                         <h3>Graph summary</h3>
                         <div class="summary-grid">
                             <div class="summary-stat"><div class="v">${this.fmtNum(d.num_nodes)}</div><div class="l">Pages</div></div>
                             <div class="summary-stat"><div class="v">${this.fmtNum(d.num_edges)}</div><div class="l">Links</div></div>
-                            <div class="summary-stat"><div class="v">${this.fmtNum(d.top_in_degree.length ? d.top_in_degree[0].degree : 0)}</div><div class="l">Top in-degree</div></div>
-                            <div class="summary-stat"><div class="v">${this.fmtNum(d.top_out_degree.length ? d.top_out_degree[0].degree : 0)}</div><div class="l">Top out-degree</div></div>
+                            <div class="summary-stat"><div class="v">${d.avg_degree.toFixed(1)}</div><div class="l">Avg degree</div></div>
+                            <div class="summary-stat"><div class="v">${d.density < 0.001 ? d.density.toExponential(1) : d.density.toFixed(5)}</div><div class="l">Density</div></div>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-pill"><span class="label">Dead ends: </span>${this.fmtNum(d.dead_ends)} (${deadEndPct.toFixed(1)}%)</span>
+                            <span class="metric-pill"><span class="label">Orphans: </span>${this.fmtNum(d.orphans)} (${orphanPct.toFixed(1)}%)</span>
+                            <span class="metric-pill"><span class="label">Self-loops: </span>${this.fmtNum(d.self_loops)}</span>
                         </div>
                     </div>
+
                     <div class="stats-card">
-                        <h3>Top hubs — most linked-to (in-degree)</h3>
+                        <h3>Top hubs — most linked-to</h3>
                         ${this.barList(d.top_in_degree, '')}
                     </div>
                     <div class="stats-card">
-                        <h3>Top linkers — most outgoing (out-degree)</h3>
+                        <h3>Top linkers — most outgoing</h3>
                         ${this.barList(d.top_out_degree, 'out')}
                     </div>
+
                     <div class="stats-card full">
-                        <h3>Reach distribution — nodes reached per BFS hop from top hubs</h3>
+                        <h3>Degree distribution — out-degree across all pages</h3>
+                        ${this.degreeDist(d.degree_distribution)}
+                    </div>
+
+                    <div class="stats-card">
+                        <h3>Dead-end hubs — most linked-to with 0 outgoing</h3>
+                        ${d.top_dead_ends && d.top_dead_ends.length ? this.barList(d.top_dead_ends, 'dead') : '<div class="stats-loading">No dead-end articles found.</div>'}
+                    </div>
+                    <div class="stats-card">
+                        <h3>Reach from top hubs — nodes per BFS hop</h3>
                         ${this.histogram(d.hop_distribution)}
                     </div>
                 `;
