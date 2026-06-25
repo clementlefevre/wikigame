@@ -91,13 +91,27 @@ pub fn parse_and_write(
         written += 1;
 
         if total_rows % 5_000_000 == 0 {
-            reporter.progress("Parsing", format!("pagelinks.sql.gz — {} rows, {} edges written", total_rows, written), total_rows, 0);
+            reporter.progress(
+                "Parsing",
+                format!(
+                    "pagelinks.sql.gz — {} rows, {} edges written",
+                    total_rows, written
+                ),
+                total_rows,
+                0,
+            );
         }
     }
 
     writer.flush().expect("flush edges.tmp");
 
-    reporter.log("Parsing", format!("pagelinks.sql.gz done — {} edges written ({} rows processed)", written, total_rows));
+    reporter.log(
+        "Parsing",
+        format!(
+            "pagelinks.sql.gz done — {} edges written ({} rows processed)",
+            written, total_rows
+        ),
+    );
 
     written
 }

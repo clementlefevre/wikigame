@@ -13,7 +13,11 @@ use hashbrown::HashMap;
 
 use crate::progress::ProgressReporter;
 
-pub fn parse(path: &Path, title_to_cid: &HashMap<String, u32>, reporter: &ProgressReporter) -> HashMap<u64, u32> {
+pub fn parse(
+    path: &Path,
+    title_to_cid: &HashMap<String, u32>,
+    reporter: &ProgressReporter,
+) -> HashMap<u64, u32> {
     reporter.phase("Parsing", "linktarget.sql.gz …");
 
     let mut lt_to_cid: HashMap<u64, u32> = HashMap::new();
@@ -50,10 +54,25 @@ pub fn parse(path: &Path, title_to_cid: &HashMap<String, u32>, reporter: &Progre
 
         count += 1;
         if count % 1_000_000 == 0 {
-            reporter.progress("Parsing", format!("linktarget.sql.gz — {} rows ({} mapped)", count, lt_to_cid.len()), count, 0);
+            reporter.progress(
+                "Parsing",
+                format!(
+                    "linktarget.sql.gz — {} rows ({} mapped)",
+                    count,
+                    lt_to_cid.len()
+                ),
+                count,
+                0,
+            );
         }
     }
 
-    reporter.log("Parsing", format!("linktarget.sql.gz done — {} link targets mapped", lt_to_cid.len()));
+    reporter.log(
+        "Parsing",
+        format!(
+            "linktarget.sql.gz done — {} link targets mapped",
+            lt_to_cid.len()
+        ),
+    );
     lt_to_cid
 }

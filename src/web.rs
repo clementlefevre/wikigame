@@ -27,6 +27,7 @@ use crate::{
     graph::LoadedGraph,
     search::shortest_path,
     setup::{AppHandle, AppState},
+    stats::{self, GraphStats},
 };
 
 struct WebState {
@@ -77,13 +78,16 @@ struct StatusResponse {
 
 pub async fn serve(port: u16, handle: AppHandle) {
     let handle = Arc::new(handle);
-    let state = Arc::new(WebState { handle: handle.clone() });
+    let state = Arc::new(WebState {
+        handle: handle.clone(),
+    });
 
     let app = Router::new()
         .route("/", get(index_handler))
         .route("/api/status", get(status_handler))
         .route("/api/setup", post(setup_handler))
         .route("/api/progress", get(progress_handler))
+        .route("/api/stats", get(stats_handler))
         .route("/search", post(search_handler))
         .route("/neighbors", post(neighbors_handler))
         .with_state(state);
@@ -102,10 +106,22 @@ async fn index_handler() -> impl IntoResponse {
 async fn status_handler(State(ws): State<Arc<WebState>>) -> impl IntoResponse {
     let state = ws.handle.state.lock().await;
     let resp = match &*state {
-        AppState::NeedsSetup => StatusResponse { state: "needs_setup".into(), message: None },
-        AppState::Building => StatusResponse { state: "building".into(), message: None },
-        AppState::Ready { .. } => StatusResponse { state: "ready".into(), message: None },
-        AppState::Error(msg) => StatusResponse { state: "error".into(), message: Some(msg.clone()) },
+        AppState::NeedsSetup => StatusResponse {
+            state: "needs_setup".into(),
+            message: None,
+        },
+        AppState::Building => StatusResponse {
+            state: "building".into(),
+            message: None,
+        },
+        AppState::Ready { .. } => StatusResponse {
+            state: "ready".into(),
+            message: None,
+        },
+        AppState::Error(msg) => StatusResponse {
+            state: "error".into(),
+            message: Some(msg.clone()),
+        },
     };
     Json(resp)
 }
@@ -143,16 +159,20 @@ async fn setup_handler(State(ws): State<Arc<WebState>>) -> impl IntoResponse {
         rt.block_on(async {
             let mut state = handle.state.lock().await;
             match result {
-                Ok(()) => {
-                    match crate::setup::load_graph(&handle.data_dir) {
-                        Some((graph, titles)) => {
-                            *state = AppState::Ready { graph, titles };
-                        }
-                        None => {
-                            *state = AppState::Error("Build reported success but graph files missing".into());
-                        }
+                Ok(()) => match crate::setup::load_graph(&handle.data_dir) {
+                    Some((graph, titles)) => {
+                        *state = AppState::Ready {
+                            graph,
+                            titles,
+                            stats: Arc::new(tokio::sync::Mutex::new(None)),
+                        };
                     }
-                }
+                    None => {
+                        *state = AppState::Error(
+                            "Build reported success but graph files missing".into(),
+                        );
+                    }
+                },
                 Err(panic_payload) => {
                     let msg = panic_payload
                         .downcast_ref::<String>()
@@ -169,21 +189,22 @@ async fn setup_handler(State(ws): State<Arc<WebState>>) -> impl IntoResponse {
     (StatusCode::ACCEPTED, "Setup started".to_string())
 }
 
-async fn progress_handler(
-    State(ws): State<Arc<WebState>>,
-) -> Response {
+async fn progress_handler(State(ws): State<Arc<WebState>>) -> Response {
     let rx = ws.handle.reporter.subscribe();
-    let stream = BroadcastStream::new(rx).filter_map(|r| r.ok()).map(|event| {
-        let json = serde_json::to_string(&event).unwrap_or_default();
-        Ok::<Event, Infallible>(Event::default().event(event.kind).data(json))
-    });
+    let stream = BroadcastStream::new(rx)
+        .filter_map(|r| r.ok())
+        .map(|event| {
+            let json = serde_json::to_string(&event).unwrap_or_default();
+            Ok::<Event, Infallible>(Event::default().event(event.kind).data(json))
+        });
 
-    Sse::new(stream).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(15))
-            .text("ping"),
-    )
-    .into_response()
+    Sse::new(stream)
+        .keep_alive(
+            KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("ping"),
+        )
+        .into_response()
 }
 
 async fn search_handler(
@@ -192,7 +213,7 @@ async fn search_handler(
 ) -> Response {
     let state = ws.handle.state.lock().await;
     let (graph, titles) = match &*state {
-        AppState::Ready { graph, titles } => (graph.clone(), titles.clone()),
+        AppState::Ready { graph, titles, .. } => (graph.clone(), titles.clone()),
         _ => {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
@@ -207,16 +228,15 @@ async fn search_handler(
         }
     };
     drop(state);
-    let result = tokio::task::spawn_blocking(move || {
-        do_search(&graph, &titles, &req.from, &req.to)
-    })
-    .await
-    .unwrap_or_else(|e| SearchResponse {
-        path: vec![],
-        hops: 0,
-        ms: 0,
-        error: Some(format!("Internal error: {}", e)),
-    });
+    let result =
+        tokio::task::spawn_blocking(move || do_search(&graph, &titles, &req.from, &req.to))
+            .await
+            .unwrap_or_else(|e| SearchResponse {
+                path: vec![],
+                hops: 0,
+                ms: 0,
+                error: Some(format!("Internal error: {}", e)),
+            });
     Json(result).into_response()
 }
 
@@ -282,7 +302,7 @@ async fn neighbors_handler(
 ) -> Response {
     let state = ws.handle.state.lock().await;
     let (graph, titles) = match &*state {
-        AppState::Ready { graph, titles } => (graph.clone(), titles.clone()),
+        AppState::Ready { graph, titles, .. } => (graph.clone(), titles.clone()),
         _ => {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
@@ -300,20 +320,24 @@ async fn neighbors_handler(
     let title_for_err = req.title.clone();
     let limit = req.limit;
     drop(state);
-    let result = tokio::task::spawn_blocking(move || {
-        do_neighbors(&graph, &titles, &title_for_resp, limit)
-    })
-    .await
-    .unwrap_or_else(|e| NeighborsResponse {
-        title: title_for_err,
-        total: 0,
-        neighbors: vec![],
-        error: Some(format!("Internal error: {}", e)),
-    });
+    let result =
+        tokio::task::spawn_blocking(move || do_neighbors(&graph, &titles, &title_for_resp, limit))
+            .await
+            .unwrap_or_else(|e| NeighborsResponse {
+                title: title_for_err,
+                total: 0,
+                neighbors: vec![],
+                error: Some(format!("Internal error: {}", e)),
+            });
     Json(result).into_response()
 }
 
-fn do_neighbors(graph: &LoadedGraph, titles: &TitleIndex, title: &str, limit: usize) -> NeighborsResponse {
+fn do_neighbors(
+    graph: &LoadedGraph,
+    titles: &TitleIndex,
+    title: &str,
+    limit: usize,
+) -> NeighborsResponse {
     let key = title.replace(' ', "_");
     let cid = match titles.title_to_cid.get(&key) {
         Some(&c) => c,
@@ -346,4 +370,53 @@ fn do_neighbors(graph: &LoadedGraph, titles: &TitleIndex, title: &str, limit: us
         neighbors,
         error: None,
     }
+}
+
+// ── Stats ────────────────────────────────────────────────────────────────────
+
+async fn stats_handler(State(ws): State<Arc<WebState>>) -> Response {
+    // Grab the graph + titles (and the stats cache lock) under the state mutex.
+    let (graph, titles, stats_lock) = {
+        let state = ws.handle.state.lock().await;
+        match &*state {
+            AppState::Ready {
+                graph,
+                titles,
+                stats,
+            } => (graph.clone(), titles.clone(), stats.clone()),
+            _ => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({ "error": "Graph not ready yet." })),
+                )
+                    .into_response();
+            }
+        }
+    };
+
+    // Fast path: already computed.
+    {
+        let guard = stats_lock.lock().await;
+        if let Some(cached) = guard.as_ref() {
+            return Json((**cached).clone()).into_response();
+        }
+    }
+
+    // Slow path: compute on a blocking thread, then cache.
+    let computed = tokio::task::spawn_blocking(move || stats::compute(&graph, &titles.titles))
+        .await
+        .unwrap_or_else(|_| GraphStats {
+            num_nodes: 0,
+            num_edges: 0,
+            top_in_degree: vec![],
+            top_out_degree: vec![],
+            hop_distribution: vec![],
+        });
+    let cached = Arc::new(computed);
+
+    let mut guard = stats_lock.lock().await;
+    if guard.is_none() {
+        *guard = Some(cached.clone());
+    }
+    Json((**guard.as_ref().unwrap()).clone()).into_response()
 }

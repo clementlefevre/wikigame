@@ -5,6 +5,7 @@ mod parse;
 mod progress;
 mod search;
 mod setup;
+mod stats;
 mod web;
 
 use std::path::PathBuf;
@@ -86,11 +87,14 @@ fn main() {
                 .unwrap()
                 .block_on(download::download_all(&cli.downloads, &reporter));
         }
-        Some(Commands::Build { no_download, keep_dumps }) => {
+        Some(Commands::Build {
+            no_download,
+            keep_dumps,
+        }) => {
             println!("=== wikigame build ===");
             let reporter = progress::ProgressReporter::standalone(64);
-            let can_resume = cli.data.join("edges.tmp").exists()
-                && cli.data.join("title_index.bin").exists();
+            let can_resume =
+                cli.data.join("edges.tmp").exists() && cli.data.join("title_index.bin").exists();
             if !can_resume && !no_download && !download::all_present(&cli.downloads) {
                 println!("Dump files not found. Downloading now ...");
                 tokio::runtime::Builder::new_multi_thread()
@@ -103,10 +107,18 @@ fn main() {
             }
             build_cmd::run(&cli.downloads, &cli.data, !keep_dumps, &reporter);
         }
-        Some(Commands::Search { from, to, interactive }) => {
+        Some(Commands::Search {
+            from,
+            to,
+            interactive,
+        }) => {
             println!("=== wikigame search ===");
-            let (graph, titles) = setup::load_graph(&cli.data)
-                .unwrap_or_else(|| panic!("Graph not found in {:?}. Run `wikigame` or `wikigame build` first.", cli.data));
+            let (graph, titles) = setup::load_graph(&cli.data).unwrap_or_else(|| {
+                panic!(
+                    "Graph not found in {:?}. Run `wikigame` or `wikigame build` first.",
+                    cli.data
+                )
+            });
             if interactive {
                 run_interactive(&graph, &titles);
             } else {
@@ -164,12 +176,7 @@ fn try_open_browser(port: u16) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-fn do_search(
-    graph: &graph::LoadedGraph,
-    titles: &build_cmd::TitleIndex,
-    from: &str,
-    to: &str,
-) {
+fn do_search(graph: &graph::LoadedGraph, titles: &build_cmd::TitleIndex, from: &str, to: &str) {
     let from_key = from.replace(' ', "_");
     let to_key = to.replace(' ', "_");
 
@@ -196,11 +203,19 @@ fn do_search(
         Some(result) => {
             println!("({} hops, {} ms)", result.hops, result.elapsed_ms);
             for (i, &cid) in result.path.iter().enumerate() {
-                let title = titles.titles.get(cid as usize).map(String::as_str).unwrap_or("?");
+                let title = titles
+                    .titles
+                    .get(cid as usize)
+                    .map(String::as_str)
+                    .unwrap_or("?");
                 if i == 0 {
                     println!("  → {}", title);
                 } else {
-                    println!("  → {} (https://en.wikipedia.org/wiki/{})", title, title.replace(' ', "_"));
+                    println!(
+                        "  → {} (https://en.wikipedia.org/wiki/{})",
+                        title,
+                        title.replace(' ', "_")
+                    );
                 }
             }
         }

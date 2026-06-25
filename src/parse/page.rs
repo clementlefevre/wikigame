@@ -73,11 +73,22 @@ pub fn parse(path: &Path, reporter: &ProgressReporter) -> PageIndex {
         titles.push(title);
 
         if titles.len() % 500_000 == 0 {
-            reporter.progress("Parsing", format!("page.sql.gz — {} articles", titles.len()), titles.len() as u64, 0);
+            reporter.progress(
+                "Parsing",
+                format!("page.sql.gz — {} articles", titles.len()),
+                titles.len() as u64,
+                0,
+            );
         }
     }
 
-    reporter.log("Parsing", format!("page.sql.gz done — {} main-namespace articles", titles.len()));
+    reporter.log(
+        "Parsing",
+        format!(
+            "page.sql.gz done — {} main-namespace articles",
+            titles.len()
+        ),
+    );
 
     PageIndex {
         wiki_id_to_cid,

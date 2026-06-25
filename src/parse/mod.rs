@@ -1,3 +1,4 @@
+pub mod linktarget;
 /// Streaming SQL INSERT tokenizer for Wikipedia dumps.
 ///
 /// Wikipedia SQL dumps consist of a series of multi-valued INSERT statements:
@@ -7,7 +8,6 @@
 /// rows as `Vec<SqlValue>`.  The caller never has to touch the gzip or string
 /// escaping machinery.
 pub mod page;
-pub mod linktarget;
 pub mod pagelinks;
 
 use std::{
@@ -131,10 +131,7 @@ fn parse_value_list(s: &str) -> Vec<Vec<SqlValue>> {
                         }
                     }
                     let token = std::str::from_utf8(&bytes[start..pos]).unwrap_or("0");
-                    let n: i64 = token
-                        .parse::<f64>()
-                        .map(|f| f as i64)
-                        .unwrap_or(0);
+                    let n: i64 = token.parse::<f64>().map(|f| f as i64).unwrap_or(0);
                     SqlValue::Int(n)
                 }
             };

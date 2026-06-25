@@ -14,14 +14,31 @@
             padding: 0;
         }
 
+        :root {
+            --accent: #0A84FF;
+            --accent-soft: rgba(10, 132, 255, 0.18);
+            --bg: #000000;
+            --panel-bg: rgba(28, 28, 30, 0.72);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            --text: #f5f5f7;
+            --text-dim: #98989d;
+            --text-faint: #636366;
+            --field-bg: rgba(118, 118, 128, 0.24);
+            --field-border: rgba(255, 255, 255, 0.06);
+            --shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.75);
+            --radius: 14px;
+        }
+
         html,
         body {
             width: 100%;
             height: 100%;
             overflow: hidden;
-            font-family: system-ui, -apple-system, sans-serif;
-            background: #0b1021;
-            color: #e2e8f0;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
         }
 
         #canvas-container {
@@ -33,124 +50,176 @@
         .panel {
             position: absolute;
             z-index: 10;
-            background: rgba(15, 23, 42, 0.92);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(148, 163, 184, 0.2);
-            border-radius: 1rem;
-            padding: 1.25rem;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            background: var(--panel-bg);
+            backdrop-filter: blur(24px) saturate(160%);
+            -webkit-backdrop-filter: blur(24px) saturate(160%);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius);
+            padding: 16px;
+            box-shadow: var(--shadow);
         }
 
         #search-panel {
-            top: 1rem;
-            left: 1rem;
-            width: 320px;
+            top: 64px;
+            left: 16px;
+            width: 300px;
         }
 
         #info-panel {
-            top: 1rem;
-            right: 1rem;
+            top: 64px;
+            right: 16px;
             width: 300px;
-            max-height: calc(100vh - 2rem);
+            max-height: calc(100vh - 80px);
             overflow-y: auto;
             display: none;
         }
 
         #controls-panel {
-            bottom: 1rem;
-            left: 1rem;
-            width: 320px;
-            padding-bottom: 1rem;
+            bottom: 16px;
+            left: 16px;
+            width: 300px;
+        }
+
+        /* Segmented control (top-center tab bar) */
+        .tabbar {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 30;
+            background: var(--panel-bg);
+            backdrop-filter: blur(24px) saturate(160%);
+            -webkit-backdrop-filter: blur(24px) saturate(160%);
+            border: 1px solid var(--panel-border);
+            border-radius: 999px;
+            padding: 3px;
+            display: flex;
+            gap: 2px;
+            box-shadow: var(--shadow);
+        }
+
+        .tabbar button {
+            width: auto;
+            background: transparent;
+            color: var(--text-dim);
+            border: none;
+            border-radius: 999px;
+            padding: 6px 18px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.18s, color 0.18s;
+            margin: 0;
+        }
+
+        .tabbar button:hover {
+            color: var(--text);
+        }
+
+        .tabbar button.active {
+            background: var(--accent);
+            color: #fff;
         }
 
         h1 {
-            font-size: 1.4rem;
-            font-weight: 800;
-            margin-bottom: 0.25rem;
+            font-size: 1.35rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 2px;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.4rem;
         }
 
         h1 span {
-            color: #38bdf8;
+            color: var(--accent);
         }
 
         .subtitle {
-            color: #94a3b8;
-            font-size: 0.8rem;
-            margin-bottom: 1rem;
+            color: var(--text-dim);
+            font-size: 0.78rem;
+            margin-bottom: 14px;
+            letter-spacing: -0.01em;
         }
 
         label {
             display: block;
-            font-size: 0.75rem;
-            color: #94a3b8;
-            margin-bottom: 0.25rem;
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+            letter-spacing: 0.01em;
         }
 
         input[type=text],
         input[type=number] {
             width: 100%;
-            background: rgba(30, 41, 59, 0.8);
-            border: 1px solid #334155;
-            border-radius: 0.5rem;
-            padding: 0.5rem 0.75rem;
-            color: #e2e8f0;
+            background: var(--field-bg);
+            border: 1px solid var(--field-border);
+            border-radius: 9px;
+            padding: 8px 11px;
+            color: var(--text);
             font-size: 0.9rem;
             outline: none;
-            margin-bottom: 0.75rem;
+            margin-bottom: 12px;
+            transition: border-color 0.15s, box-shadow 0.15s;
         }
 
         input[type=text]:focus,
         input[type=number]:focus {
-            border-color: #38bdf8;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
         }
 
         button {
             width: 100%;
-            background: #38bdf8;
-            color: #0f172a;
+            background: var(--accent);
+            color: #fff;
             border: none;
-            border-radius: 0.5rem;
-            padding: 0.6rem 1rem;
-            font-size: 0.9rem;
-            font-weight: 700;
+            border-radius: 9px;
+            padding: 9px 14px;
+            font-size: 0.88rem;
+            font-weight: 600;
             cursor: pointer;
-            transition: background 0.15s;
+            transition: filter 0.15s, opacity 0.15s;
         }
 
         button:hover {
-            background: #7dd3fc;
+            filter: brightness(1.08);
+        }
+
+        button:active {
+            opacity: 0.8;
         }
 
         button:disabled {
-            background: #334155;
-            color: #64748b;
+            background: var(--field-bg);
+            color: var(--text-faint);
             cursor: not-allowed;
         }
 
         button.secondary {
             background: transparent;
-            border: 1px solid #38bdf8;
-            color: #38bdf8;
-            margin-top: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--text);
+            margin-top: 8px;
         }
 
         button.secondary:hover {
-            background: rgba(56, 189, 248, 0.1);
+            background: rgba(255, 255, 255, 0.06);
         }
 
         .error {
-            color: #f87171;
-            font-size: 0.85rem;
-            margin-top: 0.75rem;
+            color: #ff453a;
+            font-size: 0.82rem;
+            margin-top: 10px;
         }
 
         .meta {
-            color: #94a3b8;
-            font-size: 0.8rem;
-            margin-bottom: 0.75rem;
+            color: var(--text-dim);
+            font-size: 0.78rem;
+            margin-bottom: 10px;
+            font-variant-numeric: tabular-nums;
         }
 
         .path-list {
@@ -161,49 +230,50 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            padding: 0.45rem 0.5rem;
-            border-radius: 0.4rem;
+            padding: 6px 8px;
+            border-radius: 7px;
             transition: background 0.1s;
         }
 
         .path-list li:hover {
-            background: rgba(56, 189, 248, 0.1);
+            background: rgba(255, 255, 255, 0.05);
         }
 
         .path-list li+li::before {
             content: '↓';
-            color: #38bdf8;
+            color: var(--accent);
             margin-bottom: -0.3rem;
             margin-top: -0.3rem;
             margin-left: 0.5rem;
         }
 
         .path-list a {
-            color: #e2e8f0;
+            color: var(--text);
             text-decoration: none;
-            font-size: 0.85rem;
+            font-size: 0.84rem;
         }
 
         .path-list a:hover {
-            color: #38bdf8;
+            color: var(--accent);
             text-decoration: underline;
         }
 
         .hop-badge {
-            background: #1e293b;
-            color: #94a3b8;
-            font-size: 0.65rem;
-            padding: 0.05rem 0.35rem;
+            background: rgba(118, 118, 128, 0.24);
+            color: var(--text-dim);
+            font-size: 0.62rem;
+            padding: 1px 7px;
             border-radius: 999px;
             margin-left: auto;
+            font-variant-numeric: tabular-nums;
         }
 
         .control-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 0.75rem;
-            margin-bottom: 0.5rem;
+            gap: 10px;
+            margin-bottom: 12px;
         }
 
         .control-row label {
@@ -211,48 +281,85 @@
             flex: 1;
         }
 
-        input[type=checkbox] {
-            width: 1.1rem;
-            height: 1.1rem;
-            accent-color: #38bdf8;
-            cursor: pointer;
+        input[type=number] {
+            width: 72px;
+            margin: 0;
         }
 
-        input[type=number] {
-            width: 80px;
-            margin: 0;
+        /* Apple-style toggle switch (replaces checkboxes) */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 38px;
+            height: 22px;
+            flex-shrink: 0;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .switch .track {
+            position: absolute;
+            inset: 0;
+            background: rgba(120, 120, 128, 0.32);
+            border-radius: 999px;
+            transition: background 0.2s;
+        }
+
+        .switch .track::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        .switch input:checked + .track {
+            background: var(--accent);
+        }
+
+        .switch input:checked + .track::before {
+            transform: translateX(16px);
         }
 
         .legend {
             display: flex;
-            gap: 1rem;
-            margin-top: 0.75rem;
-            font-size: 0.75rem;
-            color: #94a3b8;
+            gap: 12px;
+            margin-top: 10px;
+            font-size: 0.72rem;
+            color: var(--text-dim);
         }
 
         .legend-item {
             display: flex;
             align-items: center;
-            gap: 0.35rem;
+            gap: 5px;
         }
 
         .dot {
-            width: 10px;
-            height: 10px;
+            width: 9px;
+            height: 9px;
             border-radius: 50%;
         }
 
         .spinner {
             display: inline-block;
-            width: 1rem;
-            height: 1rem;
-            border: 2px solid #334155;
-            border-top-color: #38bdf8;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-top-color: var(--accent);
             border-radius: 50%;
             animation: spin 0.6s linear infinite;
             vertical-align: middle;
-            margin-right: 0.4rem;
+            margin-right: 6px;
         }
 
         @keyframes spin {
@@ -261,29 +368,38 @@
             }
         }
 
-        /* Three.js CSS2D labels */
+        /* Three.js CSS2D labels — no transform here; CSS2DRenderer sets it */
         .node-label {
-            color: #e2e8f0;
-            background: rgba(15, 23, 42, 0.85);
-            padding: 0.2rem 0.5rem;
-            border-radius: 0.3rem;
-            font-size: 0.75rem;
+            color: var(--text);
+            background: rgba(28, 28, 30, 0.82);
+            padding: 2px 7px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 500;
             pointer-events: none;
             white-space: nowrap;
-            border: 1px solid rgba(56, 189, 248, 0.3);
-            transform: translate(-50%, -120%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            letter-spacing: -0.01em;
+        }
+
+        .node-label.neighbor-label {
+            background: rgba(58, 58, 60, 0.9);
+            border-color: rgba(255, 255, 255, 0.06);
+            color: var(--text-dim);
         }
 
         .tooltip {
             position: absolute;
             z-index: 20;
             pointer-events: none;
-            background: rgba(15, 23, 42, 0.95);
-            border: 1px solid rgba(56, 189, 248, 0.4);
-            border-radius: 0.5rem;
-            padding: 0.5rem 0.75rem;
-            font-size: 0.8rem;
-            color: #e2e8f0;
+            background: rgba(28, 28, 30, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--panel-border);
+            border-radius: 9px;
+            padding: 7px 10px;
+            font-size: 0.78rem;
+            color: var(--text);
             display: none;
             max-width: 250px;
         }
@@ -293,11 +409,13 @@
             position: fixed;
             inset: 0;
             z-index: 100;
-            background: rgba(11, 16, 33, 0.97);
+            background: rgba(0, 0, 0, 0.92);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 1rem;
+            padding: 16px;
         }
 
         #setup-overlay.hidden {
@@ -306,53 +424,55 @@
 
         .setup-card {
             width: 100%;
-            max-width: 560px;
-            background: rgba(15, 23, 42, 0.92);
-            border: 1px solid rgba(148, 163, 184, 0.2);
-            border-radius: 1rem;
-            padding: 2rem;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            max-width: 540px;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 18px;
+            padding: 28px;
+            box-shadow: var(--shadow);
             text-align: center;
         }
 
         .setup-card h2 {
             font-size: 1.5rem;
-            font-weight: 800;
-            margin-bottom: 0.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
         }
 
         .setup-card h2 span {
-            color: #38bdf8;
+            color: var(--accent);
         }
 
         .setup-card .setup-sub {
-            color: #94a3b8;
-            font-size: 0.9rem;
-            margin-bottom: 1.5rem;
+            color: var(--text-dim);
+            font-size: 0.88rem;
+            margin-bottom: 20px;
             line-height: 1.5;
         }
 
         .setup-card .estimates {
-            background: rgba(30, 41, 59, 0.5);
-            border-radius: 0.6rem;
-            padding: 0.75rem 1rem;
-            margin-bottom: 1.5rem;
+            background: var(--field-bg);
+            border-radius: 11px;
+            padding: 12px 14px;
+            margin-bottom: 20px;
             font-size: 0.8rem;
-            color: #94a3b8;
+            color: var(--text-dim);
             text-align: left;
+            line-height: 1.6;
         }
 
         .setup-card .estimates strong {
-            color: #e2e8f0;
+            color: var(--text);
         }
 
         #setup-btn {
-            font-size: 1rem;
-            padding: 0.8rem 1.5rem;
+            font-size: 0.95rem;
+            padding: 11px 18px;
         }
 
         #setup-progress {
-            margin-top: 1.5rem;
+            margin-top: 20px;
             text-align: left;
             display: none;
         }
@@ -362,52 +482,244 @@
         }
 
         .setup-phase {
-            font-size: 0.9rem;
-            font-weight: 700;
-            color: #38bdf8;
-            margin-bottom: 0.5rem;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 8px;
         }
 
         .setup-bar-wrap {
-            background: rgba(30, 41, 59, 0.8);
+            background: var(--field-bg);
             border-radius: 999px;
             overflow: hidden;
-            height: 10px;
-            margin-bottom: 0.5rem;
+            height: 8px;
+            margin-bottom: 6px;
         }
 
         #setup-bar {
             height: 100%;
             width: 0%;
-            background: linear-gradient(90deg, #38bdf8, #7dd3fc);
+            background: var(--accent);
             transition: width 0.3s ease;
         }
 
         .setup-log {
-            background: rgba(11, 16, 33, 0.6);
-            border: 1px solid rgba(148, 163, 184, 0.15);
-            border-radius: 0.5rem;
-            padding: 0.6rem 0.75rem;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 9px 11px;
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
-            font-size: 0.75rem;
-            color: #94a3b8;
-            max-height: 180px;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            max-height: 160px;
             overflow-y: auto;
-            margin-top: 0.75rem;
+            margin-top: 10px;
             white-space: pre-wrap;
         }
 
         .setup-error {
-            color: #f87171;
-            font-size: 0.85rem;
-            margin-top: 0.75rem;
+            color: #ff453a;
+            font-size: 0.82rem;
+            margin-top: 10px;
         }
+
+        /* Stats view */
+        #stats-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 25;
+            overflow-y: auto;
+            padding: 64px 16px 32px;
+            display: none;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+        }
+
+        #stats-overlay.active {
+            display: block;
+        }
+
+        .stats-inner {
+            max-width: 980px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 760px) {
+            .stats-inner { grid-template-columns: 1fr; }
+        }
+
+        .stats-card {
+            background: var(--panel-bg);
+            backdrop-filter: blur(24px) saturate(160%);
+            -webkit-backdrop-filter: blur(24px) saturate(160%);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius);
+            padding: 18px;
+            box-shadow: var(--shadow);
+        }
+
+        .stats-card.full {
+            grid-column: 1 / -1;
+        }
+
+        .stats-card h3 {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 14px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .summary-stat {
+            background: var(--field-bg);
+            border-radius: 11px;
+            padding: 14px;
+        }
+
+        .summary-stat .v {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .summary-stat .l {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+
+        .bar-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 7px;
+            font-size: 0.8rem;
+        }
+
+        .bar-row .rank {
+            color: var(--text-faint);
+            font-size: 0.72rem;
+            width: 18px;
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .bar-row .name {
+            width: 150px;
+            flex-shrink: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text);
+        }
+
+        .bar-row .name a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .bar-row .name a:hover {
+            color: var(--accent);
+        }
+
+        .bar-wrap {
+            flex: 1;
+            height: 8px;
+            background: var(--field-bg);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 999px;
+            transition: width 0.4s ease;
+        }
+
+        .bar-fill.out { background: #bf5af2; }
+
+        .bar-row .val {
+            width: 56px;
+            flex-shrink: 0;
+            text-align: right;
+            color: var(--text-dim);
+            font-variant-numeric: tabular-nums;
+            font-size: 0.74rem;
+        }
+
+        .hist {
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            height: 160px;
+            padding-top: 10px;
+        }
+
+        .hist-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            height: 100%;
+            justify-content: flex-end;
+        }
+
+        .hist-bar {
+            width: 100%;
+            max-width: 48px;
+            background: var(--accent);
+            border-radius: 6px 6px 0 0;
+            min-height: 2px;
+            transition: height 0.4s ease;
+        }
+
+        .hist-label {
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .stats-loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
     </style>
 </head>
 
 <body>
     <div id="canvas-container"></div>
     <div class="tooltip" id="tooltip"></div>
+
+    <!-- Tab bar -->
+    <div class="tabbar">
+        <button id="tab-explore" class="active" onclick="app.switchTab('explore')">Explore</button>
+        <button id="tab-stats" onclick="app.switchTab('stats')">Stats</button>
+    </div>
+
+    <!-- Stats overlay -->
+    <div id="stats-overlay">
+        <div class="stats-inner" id="stats-content">
+            <div class="stats-loading"><span class="spinner"></span>Loading graph insights…</div>
+        </div>
+    </div>
 
     <!-- Setup wizard overlay -->
     <div id="setup-overlay" class="hidden">
@@ -428,7 +740,7 @@
             <div id="setup-progress">
                 <div class="setup-phase" id="setup-phase">Preparing…</div>
                 <div class="setup-bar-wrap"><div id="setup-bar"></div></div>
-                <div id="setup-pct" style="font-size:0.8rem;color:#94a3b8;text-align:center;">0%</div>
+                <div id="setup-pct" style="font-size:0.8rem;color:#98989d;text-align:center;">0%</div>
                 <div class="setup-log" id="setup-log"></div>
                 <div class="setup-error" id="setup-error"></div>
             </div>
@@ -457,7 +769,10 @@
     <div id="controls-panel" class="panel">
         <div class="control-row">
             <label for="show-cloud">Show neighbor cloud</label>
-            <input type="checkbox" id="show-cloud" checked onchange="app.toggleCloud()" />
+            <label class="switch">
+                <input type="checkbox" id="show-cloud" checked onchange="app.toggleCloud()" />
+                <span class="track"></span>
+            </label>
         </div>
         <div class="control-row">
             <label for="neighbor-limit">Neighbors per node</label>
@@ -465,13 +780,16 @@
         </div>
         <div class="control-row">
             <label for="show-labels">Show labels</label>
-            <input type="checkbox" id="show-labels" checked onchange="app.toggleLabels()" />
+            <label class="switch">
+                <input type="checkbox" id="show-labels" checked onchange="app.toggleLabels()" />
+                <span class="track"></span>
+            </label>
         </div>
         <button class="secondary" onclick="app.resetCamera()">Reset camera</button>
 
         <div class="legend">
-            <div class="legend-item"><span class="dot" style="background:#38bdf8"></span> Path node</div>
-            <div class="legend-item"><span class="dot" style="background:#a78bfa"></span> Neighbor</div>
+            <div class="legend-item"><span class="dot" style="background:#0A84FF"></span> Path node</div>
+            <div class="legend-item"><span class="dot" style="background:#bf5af2"></span> Neighbor</div>
         </div>
     </div>
 
@@ -683,13 +1001,105 @@
             pathGroup: null,
             lastPath: [],
             hovered: null,
+            currentTab: 'explore',
+            statsLoaded: false,
+
+            switchTab(tab) {
+                this.currentTab = tab;
+                document.getElementById('tab-explore').classList.toggle('active', tab === 'explore');
+                document.getElementById('tab-stats').classList.toggle('active', tab === 'stats');
+                document.getElementById('stats-overlay').classList.toggle('active', tab === 'stats');
+                if (tab === 'stats' && !this.statsLoaded) this.loadStats();
+            },
+
+            async loadStats() {
+                const content = document.getElementById('stats-content');
+                content.innerHTML = '<div class="stats-loading"><span class="spinner"></span>Computing graph insights (first load may take a while)…</div>';
+                try {
+                    const r = await fetch('/api/stats');
+                    const d = await r.json();
+                    if (d.error) {
+                        content.innerHTML = `<div class="stats-loading" style="color:#ff453a">${d.error}</div>`;
+                        return;
+                    }
+                    this.renderStats(d);
+                    this.statsLoaded = true;
+                } catch (e) {
+                    content.innerHTML = `<div class="stats-loading" style="color:#ff453a">Failed to load stats: ${e.message}</div>`;
+                }
+            },
+
+            fmtNum(n) {
+                if (n == null) return '—';
+                if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+                if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+                if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+                return n.toLocaleString();
+            },
+
+            wikiUrl(title) {
+                return 'https://en.wikipedia.org/wiki/' + encodeURIComponent(title.replace(/ /g, '_'));
+            },
+
+            barList(items, cls) {
+                if (!items || !items.length) return '<div class="stats-loading">No data.</div>';
+                const max = items[0].degree || 1;
+                return items.map((it, i) => {
+                    const pct = ((it.degree / max) * 100).toFixed(1);
+                    return `<div class="bar-row">
+                        <span class="rank">${i + 1}</span>
+                        <span class="name"><a href="${this.wikiUrl(it.title)}" target="_blank" rel="noopener" title="${it.title}">${it.title.replace(/_/g, ' ')}</a></span>
+                        <span class="bar-wrap"><span class="bar-fill ${cls}" style="width:${pct}%"></span></span>
+                        <span class="val">${this.fmtNum(it.degree)}</span>
+                    </div>`;
+                }).join('');
+            },
+
+            histogram(buckets) {
+                if (!buckets || !buckets.length) return '<div class="stats-loading">No data.</div>';
+                const max = Math.max(...buckets.map(b => b.count), 1);
+                return '<div class="hist">' + buckets.map(b => {
+                    const h = ((b.count / max) * 100).toFixed(1);
+                    return `<div class="hist-col">
+                        <div class="hist-bar" style="height:${h}%"></div>
+                        <div class="hist-label">${b.hops}</div>
+                    </div>`;
+                }).join('') + '</div>';
+            },
+
+            renderStats(d) {
+                const content = document.getElementById('stats-content');
+                content.innerHTML = `
+                    <div class="stats-card full">
+                        <h3>Graph summary</h3>
+                        <div class="summary-grid">
+                            <div class="summary-stat"><div class="v">${this.fmtNum(d.num_nodes)}</div><div class="l">Pages</div></div>
+                            <div class="summary-stat"><div class="v">${this.fmtNum(d.num_edges)}</div><div class="l">Links</div></div>
+                            <div class="summary-stat"><div class="v">${this.fmtNum(d.top_in_degree.length ? d.top_in_degree[0].degree : 0)}</div><div class="l">Top in-degree</div></div>
+                            <div class="summary-stat"><div class="v">${this.fmtNum(d.top_out_degree.length ? d.top_out_degree[0].degree : 0)}</div><div class="l">Top out-degree</div></div>
+                        </div>
+                    </div>
+                    <div class="stats-card">
+                        <h3>Top hubs — most linked-to (in-degree)</h3>
+                        ${this.barList(d.top_in_degree, '')}
+                    </div>
+                    <div class="stats-card">
+                        <h3>Top linkers — most outgoing (out-degree)</h3>
+                        ${this.barList(d.top_out_degree, 'out')}
+                    </div>
+                    <div class="stats-card full">
+                        <h3>Reach distribution — nodes reached per BFS hop from top hubs</h3>
+                        ${this.histogram(d.hop_distribution)}
+                    </div>
+                `;
+            },
 
             async init() {
                 const container = document.getElementById('canvas-container');
 
                 this.scene = new THREE.Scene();
-                this.scene.background = new THREE.Color(0x0b1021);
-                this.scene.fog = new THREE.FogExp2(0x0b1021, 0.015);
+                this.scene.background = new THREE.Color(0x000000);
+                this.scene.fog = new THREE.FogExp2(0x000000, 0.012);
 
                 this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
                 this.camera.position.set(0, 0, 40);
@@ -818,11 +1228,15 @@
                 mesh.userData = { title, kind, parentIndex };
 
                 const labelDiv = document.createElement('div');
-                labelDiv.className = 'node-label';
+                labelDiv.className = 'node-label' + (kind === 'path' ? '' : ' neighbor-label');
                 labelDiv.textContent = title.replace(/_/g, ' ');
-                if (kind !== 'path') labelDiv.style.display = document.getElementById('show-labels').checked ? 'block' : 'none';
                 const label = new CSS2DObject(labelDiv);
-                label.position.set(0, kind === 'path' ? 0.8 : 0.5, 0);
+                label.position.set(0, kind === 'path' ? 0.9 : 0.5, 0);
+                // Neighbor labels hidden by default; shown on hover. Path labels
+                // respect the "Show labels" toggle. Using .visible (which
+                // CSS2DRenderer honors) instead of style.display — the latter is
+                // overwritten by the renderer every frame, making the toggle a no-op.
+                label.visible = kind === 'path' ? document.getElementById('show-labels').checked : false;
                 mesh.add(label);
 
                 return { mesh, title, kind, parentIndex };
@@ -845,7 +1259,7 @@
                     const z = Math.cos(i * 0.6) * 2;
                     const pos = new THREE.Vector3(x, y, z);
 
-                    const node = this.createNode(title, pos, 0x38bdf8, 'path', i);
+                    const node = this.createNode(title, pos, 0x0A84FF, 'path', i);
                     this.pathGroup.add(node.mesh);
                     pathNodes.push(node);
                     this.nodes.push(node);
@@ -857,7 +1271,7 @@
                     const b = pathNodes[i + 1].mesh.position;
                     const dist = a.distanceTo(b);
                     const geometry = new THREE.CylinderGeometry(0.08, 0.08, dist, 8);
-                    const material = new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.7 });
+                    const material = new THREE.MeshStandardMaterial({ color: 0x0A84FF, transparent: true, opacity: 0.7 });
                     const edge = new THREE.Mesh(geometry, material);
 
                     const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
@@ -913,7 +1327,7 @@
                         );
                         const pos = center.clone().add(offset);
 
-                        const node = this.createNode(title, pos, 0xa78bfa, 'neighbor', parentIndex);
+                        const node = this.createNode(title, pos, 0xbf5af2, 'neighbor', parentIndex);
                         this.cloudGroup.add(node.mesh);
                         this.nodes.push(node);
                     });
@@ -929,12 +1343,14 @@
 
             toggleLabels() {
                 const show = document.getElementById('show-labels').checked;
+                // Toggle visibility of path-node labels only. Neighbor labels are
+                // shown transiently on hover. CSS2DRenderer honors .visible, so
+                // we toggle that (NOT element.style.display, which the renderer
+                // overwrites every frame).
                 this.nodes.forEach(n => {
-                    if (n.kind !== 'path') {
+                    if (n.kind === 'path') {
                         n.mesh.children.forEach(c => {
-                            if (c.element && c.element.classList.contains('node-label')) {
-                                c.element.style.display = show ? 'block' : 'none';
-                            }
+                            if (c.isCSS2DObject) c.visible = show;
                         });
                     }
                 });
@@ -990,9 +1406,26 @@
                     tooltip.style.top = event.clientY + 12 + 'px';
                     tooltip.innerHTML = `<strong>${kind}</strong><br>${title}`;
                     document.body.style.cursor = 'pointer';
+
+                    // Reveal the hovered node's label; hide previously-hovered
+                    // neighbor label. Path labels keep their toggle state.
+                    if (this.hovered && this.hovered !== obj) {
+                        if (this.hovered.userData.kind !== 'path') {
+                            this.hovered.children.forEach(c => { if (c.isCSS2DObject) c.visible = false; });
+                        }
+                    }
+                    if (obj.userData.kind !== 'path') {
+                        obj.children.forEach(c => { if (c.isCSS2DObject) c.visible = true; });
+                    }
+                    this.hovered = obj;
                 } else {
                     tooltip.style.display = 'none';
                     document.body.style.cursor = 'default';
+                    // Hide the last hovered neighbor label.
+                    if (this.hovered && this.hovered.userData.kind !== 'path') {
+                        this.hovered.children.forEach(c => { if (c.isCSS2DObject) c.visible = false; });
+                    }
+                    this.hovered = null;
                 }
             }
         };

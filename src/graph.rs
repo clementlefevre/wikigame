@@ -5,11 +5,7 @@
 /// count as `max_node_index + 1`, giving a 1-node graph when there are 0
 /// edges) and to keep memory usage tiny by memory-mapping the binary files
 /// instead of copying them into `Vec`s.
-use std::{
-    fs::File,
-    path::Path,
-    time::Instant,
-};
+use std::{fs::File, path::Path, time::Instant};
 
 use memmap2::{Mmap, MmapOptions};
 
@@ -47,6 +43,16 @@ impl WikiCsr {
             &columns[start..end]
         }
     }
+
+    /// Length in bytes of the offsets memory map.
+    pub fn offset_len(&self) -> usize {
+        self.offsets_mmap.len()
+    }
+
+    /// Length in bytes of the columns memory map.
+    pub fn column_len(&self) -> usize {
+        self.columns_mmap.len()
+    }
 }
 
 pub struct LoadedGraph {
@@ -79,8 +85,7 @@ pub fn load(data_dir: &Path) -> LoadedGraph {
 // ── I/O helpers ─────────────────────────────────────────────────────────────────
 
 fn mmap_u64_array(path: &Path) -> Mmap {
-    let file = File::open(path)
-        .unwrap_or_else(|e| panic!("Cannot open {:?}: {}", path, e));
+    let file = File::open(path).unwrap_or_else(|e| panic!("Cannot open {:?}: {}", path, e));
     unsafe {
         MmapOptions::new()
             .map(&file)
@@ -89,8 +94,7 @@ fn mmap_u64_array(path: &Path) -> Mmap {
 }
 
 fn mmap_u32_array(path: &Path) -> Mmap {
-    let file = File::open(path)
-        .unwrap_or_else(|e| panic!("Cannot open {:?}: {}", path, e));
+    let file = File::open(path).unwrap_or_else(|e| panic!("Cannot open {:?}: {}", path, e));
     unsafe {
         MmapOptions::new()
             .map(&file)

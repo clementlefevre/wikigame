@@ -35,7 +35,12 @@ pub struct TitleIndex {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-pub fn run(downloads_dir: &Path, output_dir: &Path, delete_dumps: bool, reporter: &ProgressReporter) {
+pub fn run(
+    downloads_dir: &Path,
+    output_dir: &Path,
+    delete_dumps: bool,
+    reporter: &ProgressReporter,
+) {
     fs::create_dir_all(output_dir)
         .unwrap_or_else(|e| panic!("Cannot create output dir {:?}: {}", output_dir, e));
 
@@ -46,7 +51,10 @@ pub fn run(downloads_dir: &Path, output_dir: &Path, delete_dumps: bool, reporter
     // parsing and go straight to CSR construction. This avoids re-downloading the
     // large .gz dumps when a previous build was killed during CSR construction.
     if edges_path.exists() && title_index_path.exists() {
-        reporter.log("Build", "Resuming from existing edges.tmp and title_index.bin");
+        reporter.log(
+            "Build",
+            "Resuming from existing edges.tmp and title_index.bin",
+        );
         let num_nodes = load_title_index(output_dir).titles.len() as u32;
         let num_edges = edges_path
             .metadata()
@@ -80,22 +88,14 @@ pub fn run(downloads_dir: &Path, output_dir: &Path, delete_dumps: bool, reporter
 
     // ── Step 2: parse linktarget dump ─────────────────────────────────────────
     let lt_path = downloads_dir.join("enwiki-latest-linktarget.sql.gz");
-    assert!(
-        lt_path.exists(),
-        "Missing: {}",
-        lt_path.display()
-    );
+    assert!(lt_path.exists(), "Missing: {}", lt_path.display());
     let lt_to_cid = parse::linktarget::parse(&lt_path, &page_index.title_to_cid, reporter);
     reporter.log("Build", format!("Link targets mapped: {}", lt_to_cid.len()));
     maybe_delete_dump(&lt_path, delete_dumps, reporter);
 
     // ── Step 3: parse pagelinks, write edges.tmp ──────────────────────────────
     let pl_path = downloads_dir.join("enwiki-latest-pagelinks.sql.gz");
-    assert!(
-        pl_path.exists(),
-        "Missing: {}",
-        pl_path.display()
-    );
+    assert!(pl_path.exists(), "Missing: {}", pl_path.display());
     let num_edges = parse::pagelinks::parse_and_write(
         &pl_path,
         &edges_path,
@@ -114,15 +114,27 @@ pub fn run(downloads_dir: &Path, output_dir: &Path, delete_dumps: bool, reporter
 }
 
 /// Build CSR binaries from a complete `edges.tmp` file and delete it when done.
-fn build_csr(output_dir: &Path, edges_path: &Path, num_nodes: u32, num_edges: u64, reporter: &ProgressReporter) {
+fn build_csr(
+    output_dir: &Path,
+    edges_path: &Path,
+    num_nodes: u32,
+    num_edges: u64,
+    reporter: &ProgressReporter,
+) {
     // ── Pass 1: count degrees ─────────────────────────────────────
     reporter.phase("Building CSR", "Pass 1: counting degrees …");
     let mut fwd_degree = vec![0u32; num_nodes as usize + 1];
     let mut bwd_degree = vec![0u32; num_nodes as usize + 1];
-    stream_edges(edges_path, num_edges, |src, dst| {
-        fwd_degree[src as usize] += 1;
-        bwd_degree[dst as usize] += 1;
-    }, reporter, "CSR pass 1");
+    stream_edges(
+        edges_path,
+        num_edges,
+        |src, dst| {
+            fwd_degree[src as usize] += 1;
+            bwd_degree[dst as usize] += 1;
+        },
+        reporter,
+        "CSR pass 1",
+    );
 
     // Prefix-sum → offsets arrays (length = num_nodes + 1)
     let fwd_offsets = degree_to_offsets(fwd_degree);
@@ -139,11 +151,17 @@ fn build_csr(output_dir: &Path, edges_path: &Path, num_nodes: u32, num_edges: u6
         let mut fwd_columns = vec![0u32; num_edges as usize];
         pre_touch_pages(&mut fwd_columns);
         let mut fwd_cursor: Vec<u64> = fwd_offsets[..fwd_offsets.len() - 1].to_vec();
-        stream_edges(edges_path, num_edges, |src, dst| {
-            let fi = fwd_cursor[src as usize] as usize;
-            fwd_columns[fi] = dst;
-            fwd_cursor[src as usize] += 1;
-        }, reporter, "CSR pass 2");
+        stream_edges(
+            edges_path,
+            num_edges,
+            |src, dst| {
+                let fi = fwd_cursor[src as usize] as usize;
+                fwd_columns[fi] = dst;
+                fwd_cursor[src as usize] += 1;
+            },
+            reporter,
+            "CSR pass 2",
+        );
         write_u32_array(output_dir.join("fwd_columns.bin"), &fwd_columns);
     } // fwd_columns dropped here
 
@@ -153,23 +171,38 @@ fn build_csr(output_dir: &Path, edges_path: &Path, num_nodes: u32, num_edges: u6
         let mut bwd_columns = vec![0u32; num_edges as usize];
         pre_touch_pages(&mut bwd_columns);
         let mut bwd_cursor: Vec<u64> = bwd_offsets[..bwd_offsets.len() - 1].to_vec();
-        stream_edges(edges_path, num_edges, |src, dst| {
-            let bi = bwd_cursor[dst as usize] as usize;
-            bwd_columns[bi] = src;
-            bwd_cursor[dst as usize] += 1;
-        }, reporter, "CSR pass 3");
+        stream_edges(
+            edges_path,
+            num_edges,
+            |src, dst| {
+                let bi = bwd_cursor[dst as usize] as usize;
+                bwd_columns[bi] = src;
+                bwd_cursor[dst as usize] += 1;
+            },
+            reporter,
+            "CSR pass 3",
+        );
         write_u32_array(output_dir.join("bwd_columns.bin"), &bwd_columns);
     } // bwd_columns dropped here
 
     // Delete temporary edge file
     fs::remove_file(edges_path).ok();
     reporter.log("Build", "Deleted edges.tmp");
-    reporter.log("Build", format!("Build complete. Processed files are in {:?}", output_dir));
+    reporter.log(
+        "Build",
+        format!("Build complete. Processed files are in {:?}", output_dir),
+    );
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-fn stream_edges<F: FnMut(u32, u32)>(path: &Path, num_edges: u64, mut f: F, reporter: &ProgressReporter, phase: &str) {
+fn stream_edges<F: FnMut(u32, u32)>(
+    path: &Path,
+    num_edges: u64,
+    mut f: F,
+    reporter: &ProgressReporter,
+    phase: &str,
+) {
     let file = File::open(path).unwrap_or_else(|e| panic!("Cannot open edges.tmp: {}", e));
     let mut reader = BufReader::with_capacity(32 * 1024 * 1024, file);
     let mut buf = [0u8; 8];
@@ -186,10 +219,20 @@ fn stream_edges<F: FnMut(u32, u32)>(path: &Path, num_edges: u64, mut f: F, repor
         f(src, dst);
         count += 1;
         if count % 10_000_000 == 0 {
-            reporter.progress("Building CSR", format!("{}: {} / {} edges", phase, count, num_edges), count, num_edges);
+            reporter.progress(
+                "Building CSR",
+                format!("{}: {} / {} edges", phase, count, num_edges),
+                count,
+                num_edges,
+            );
         }
     }
-    reporter.progress("Building CSR", format!("{}: streamed {} edges", phase, count), count, num_edges);
+    reporter.progress(
+        "Building CSR",
+        format!("{}: streamed {} edges", phase, count),
+        count,
+        num_edges,
+    );
 }
 
 fn degree_to_offsets(degree: Vec<u32>) -> Vec<u64> {
@@ -211,8 +254,7 @@ fn write_bincode<T: Serialize>(path: PathBuf, value: &T) {
 
 fn load_title_index(output_dir: &Path) -> TitleIndex {
     let path = output_dir.join("title_index.bin");
-    let f = File::open(&path)
-        .unwrap_or_else(|e| panic!("Cannot open {:?}: {}", path, e));
+    let f = File::open(&path).unwrap_or_else(|e| panic!("Cannot open {:?}: {}", path, e));
     let r = BufReader::new(f);
     bincode::deserialize_from(r)
         .unwrap_or_else(|e| panic!("Failed to deserialize title_index.bin: {}", e))
@@ -237,7 +279,10 @@ fn write_u32_array(path: PathBuf, arr: &[u32]) {
 fn maybe_delete_dump(path: &Path, delete: bool, reporter: &ProgressReporter) {
     if delete {
         if let Err(e) = fs::remove_file(path) {
-            reporter.log("Build", format!("Warning: could not delete {:?}: {}", path, e));
+            reporter.log(
+                "Build",
+                format!("Warning: could not delete {:?}: {}", path, e),
+            );
         } else {
             reporter.log("Build", format!("Deleted {:?}", path));
         }

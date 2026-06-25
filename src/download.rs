@@ -23,9 +23,13 @@ pub const BASE_URL: &str = "https://dumps.wikimedia.org/enwiki/latest";
 
 /// (filename, friendly label, approximate size in bytes for UI hints)
 pub const DUMPS: &[(&str, &str, u64)] = &[
-    ("enwiki-latest-page.sql.gz",       "page",       2_400_000_000),
-    ("enwiki-latest-linktarget.sql.gz", "linktarget", 1_400_000_000),
-    ("enwiki-latest-pagelinks.sql.gz",  "pagelinks",  6_900_000_000),
+    ("enwiki-latest-page.sql.gz", "page", 2_400_000_000),
+    (
+        "enwiki-latest-linktarget.sql.gz",
+        "linktarget",
+        1_400_000_000,
+    ),
+    ("enwiki-latest-pagelinks.sql.gz", "pagelinks", 6_900_000_000),
 ];
 
 // ── Public entry point ─────────────────────────────────────────────────────────
@@ -48,7 +52,13 @@ pub async fn download_all(dest_dir: &Path, reporter: &ProgressReporter) {
         let dest = dest_dir.join(filename);
         reporter.phase(
             "Downloading",
-            format!("[{}/{}] {} (≈{:.1} GB)", i + 1, DUMPS.len(), label, *approx as f64 / 1e9),
+            format!(
+                "[{}/{}] {} (≈{:.1} GB)",
+                i + 1,
+                DUMPS.len(),
+                label,
+                *approx as f64 / 1e9
+            ),
         );
         download_file(&client, &url, &dest, label, reporter).await;
     }
@@ -58,12 +68,15 @@ pub async fn download_all(dest_dir: &Path, reporter: &ProgressReporter) {
 
 // ── Per-file download ──────────────────────────────────────────────────────────
 
-async fn download_file(client: &Client, url: &str, dest: &Path, label: &str, reporter: &ProgressReporter) {
+async fn download_file(
+    client: &Client,
+    url: &str,
+    dest: &Path,
+    label: &str,
+    reporter: &ProgressReporter,
+) {
     // Find out how many bytes we already have on disk.
-    let existing_bytes = dest
-        .metadata()
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let existing_bytes = dest.metadata().map(|m| m.len()).unwrap_or(0);
 
     // HEAD request to get total size.
     let total_size = match client.head(url).send().await {
@@ -77,7 +90,9 @@ async fn download_file(client: &Client, url: &str, dest: &Path, label: &str, rep
             let msg = format!(
                 "HEAD request failed: {}{}",
                 e,
-                e.source().map(|s| format!(" (caused by: {})", s)).unwrap_or_default()
+                e.source()
+                    .map(|s| format!(" (caused by: {})", s))
+                    .unwrap_or_default()
             );
             reporter.error(msg.clone());
             panic!("{}", msg);
@@ -85,40 +100,44 @@ async fn download_file(client: &Client, url: &str, dest: &Path, label: &str, rep
     };
 
     if total_size > 0 && existing_bytes >= total_size {
-        reporter.progress("Downloading", format!("{} already complete", label), total_size, total_size);
+        reporter.progress(
+            "Downloading",
+            format!("{} already complete", label),
+            total_size,
+            total_size,
+        );
         return;
     }
 
     if existing_bytes > 0 && total_size > 0 {
         reporter.log(
             "Downloading",
-            format!("Resuming {} from {} / {} bytes ({:.1}%)", label, existing_bytes, total_size,
-                existing_bytes as f64 / total_size as f64 * 100.0),
+            format!(
+                "Resuming {} from {} / {} bytes ({:.1}%)",
+                label,
+                existing_bytes,
+                total_size,
+                existing_bytes as f64 / total_size as f64 * 100.0
+            ),
         );
     }
 
     // Build the GET request with optional Range header for resuming.
     let mut req = client.get(url);
     if existing_bytes > 0 {
-        req = req.header(
-            reqwest::header::RANGE,
-            format!("bytes={}-", existing_bytes),
-        );
+        req = req.header(reqwest::header::RANGE, format!("bytes={}-", existing_bytes));
     }
 
-    let resp = req
-        .send()
-        .await
-        .unwrap_or_else(|e| {
-            let mut msg = format!("Failed to connect to {}: {}", url, e);
-            let mut source = e.source();
-            while let Some(s) = source {
-                msg.push_str(&format!("\n  caused by: {}", s));
-                source = s.source();
-            }
-            reporter.error(msg.clone());
-            panic!("{}", msg);
-        });
+    let resp = req.send().await.unwrap_or_else(|e| {
+        let mut msg = format!("Failed to connect to {}: {}", url, e);
+        let mut source = e.source();
+        while let Some(s) = source {
+            msg.push_str(&format!("\n  caused by: {}", s));
+            source = s.source();
+        }
+        reporter.error(msg.clone());
+        panic!("{}", msg);
+    });
 
     let status = resp.status();
     if !status.is_success() && status.as_u16() != 206 {
@@ -145,7 +164,12 @@ async fn download_file(client: &Client, url: &str, dest: &Path, label: &str, rep
         file_existing + remaining
     };
 
-    reporter.progress("Downloading", format!("{}", label), file_existing, display_total);
+    reporter.progress(
+        "Downloading",
+        format!("{}", label),
+        file_existing,
+        display_total,
+    );
 
     // Open file for appending (or truncate if not resuming).
     let mut file = if resume && file_existing > 0 {
@@ -178,7 +202,12 @@ async fn download_file(client: &Client, url: &str, dest: &Path, label: &str, rep
         }
     }
 
-    reporter.progress("Downloading", format!("{} saved", label), display_total, display_total);
+    reporter.progress(
+        "Downloading",
+        format!("{} saved", label),
+        display_total,
+        display_total,
+    );
 }
 
 // ── Helper: check all 3 files exist ───────────────────────────────────────────

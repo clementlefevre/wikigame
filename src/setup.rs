@@ -13,6 +13,7 @@ use crate::{
     download,
     graph::{self, LoadedGraph},
     progress::ProgressReporter,
+    stats::GraphStats,
 };
 
 /// Whether the processed graph is already present on disk.
@@ -76,6 +77,7 @@ pub enum AppState {
     Ready {
         graph: Arc<LoadedGraph>,
         titles: Arc<TitleIndex>,
+        stats: Arc<tokio::sync::Mutex<Option<Arc<GraphStats>>>>,
     },
     Error(String),
 }
@@ -100,7 +102,11 @@ impl AppHandle {
     pub fn new(downloads_dir: PathBuf, data_dir: PathBuf) -> Self {
         let initial = if graph_ready(&data_dir) {
             match load_graph(&data_dir) {
-                Some((graph, titles)) => AppState::Ready { graph, titles },
+                Some((graph, titles)) => AppState::Ready {
+                    graph,
+                    titles,
+                    stats: Arc::new(tokio::sync::Mutex::new(None)),
+                },
                 None => AppState::NeedsSetup,
             }
         } else {
