@@ -6,3 +6,4 @@ data/processed/
 
 # Temp files
 *.tmp
+*.log
