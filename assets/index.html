@@ -788,8 +788,8 @@
         <button class="secondary" onclick="app.resetCamera()">Reset camera</button>
 
         <div class="legend">
-            <div class="legend-item"><span class="dot" style="background:#0A84FF"></span> Path node</div>
-            <div class="legend-item"><span class="dot" style="background:#bf5af2"></span> Neighbor</div>
+            <div class="legend-item"><span class="dot" style="background:linear-gradient(90deg,#3366CC,#00AF89,#5E8C2A)"></span> Path (hop gradient)</div>
+            <div class="legend-item"><span class="dot" style="background:#E08B00"></span> Neighbor</div>
         </div>
     </div>
 
@@ -1004,6 +1004,45 @@
             currentTab: 'explore',
             statsLoaded: false,
 
+            // Wikipedia-inspired palette. Link blue → teal → green along the
+            // path; neighbor nodes shift hue based on which path hop they
+            // branch from, giving a sense of "depth from the path".
+            PALETTE: {
+                linkBlue:   0x3366CC, // en.wikipedia unvisited link
+                teal:       0x00AF89, // wikipedia teal (constructive)
+                green:      0x5E8C2A, // wikipedia "good article" green
+                redLink:    0xBA0000, // wikipedia red link
+                amber:      0xE08B00, // warm accent
+            },
+
+            // Linearly interpolate between two hex colors. t in [0,1].
+            lerpColor(a, b, t) {
+                const ar = (a >> 16) & 0xff, ag = (a >> 8) & 0xff, ab = a & 0xff;
+                const br = (b >> 16) & 0xff, bg = (b >> 8) & 0xff, bb = b & 0xff;
+                const r = Math.round(ar + (br - ar) * t);
+                const g = Math.round(ag + (bg - ag) * t);
+                const bl = Math.round(ab + (bb - ab) * t);
+                return (r << 16) | (g << 8) | bl;
+            },
+
+            // Color for a path node at fraction `f` (0..1) along the path.
+            // Wikipedia link-blue → teal → green.
+            pathColor(f) {
+                if (f < 0.5) return this.lerpColor(this.PALETTE.linkBlue, this.PALETTE.teal, f * 2);
+                return this.lerpColor(this.PALETTE.teal, this.PALETTE.green, (f - 0.5) * 2);
+            },
+
+            // Color for a neighbor node branching from path hop `hop` (0..1).
+            // Rotates hue around the path color so each hop's neighbor cloud
+            // is visually distinct, then desaturates slightly to read as
+            // "supporting" rather than "on the path".
+            neighborColor(hopF, jitter) {
+                const base = this.pathColor(hopF);
+                // blend toward amber/red for warm variation, with jitter
+                const target = this.lerpColor(base, this.PALETTE.amber, 0.4 + jitter * 0.3);
+                return target;
+            },
+
             switchTab(tab) {
                 this.currentTab = tab;
                 document.getElementById('tab-explore').classList.toggle('active', tab === 'explore');
@@ -1160,7 +1199,7 @@
                 }
 
                 btn.disabled = true;
-                errorEl.innerHTML = '<p style="color:#94a3b8;margin-top:0.5rem"><span class="spinner"></span>Searching…</p>';
+                errorEl.innerHTML = '<p style="color:#98989d;margin-top:0.5rem"><span class="spinner"></span>Searching…</p>';
 
                 try {
                     const resp = await fetch('/search', {
@@ -1221,11 +1260,11 @@
                     roughness: 0.4,
                     metalness: 0.3,
                     emissive: color,
-                    emissiveIntensity: 0.25
+                    emissiveIntensity: kind === 'path' ? 0.3 : 0.15
                 });
                 const mesh = new THREE.Mesh(geometry, material);
                 mesh.position.copy(position);
-                mesh.userData = { title, kind, parentIndex };
+                mesh.userData = { title, kind, parentIndex, color };
 
                 const labelDiv = document.createElement('div');
                 labelDiv.className = 'node-label' + (kind === 'path' ? '' : ' neighbor-label');
@@ -1250,28 +1289,50 @@
                 const count = path.length;
                 const spacing = 5;
                 const pathNodes = [];
+                const last = Math.max(1, count - 1);
 
                 path.forEach((title, i) => {
                     // Layout path in a gentle 3-D arc
-                    const t = (i / Math.max(1, count - 1)) - 0.5;
+                    const t = (i / last) - 0.5;
                     const x = t * spacing * (count - 1);
                     const y = Math.sin(i * 0.8) * 2;
                     const z = Math.cos(i * 0.6) * 2;
                     const pos = new THREE.Vector3(x, y, z);
 
-                    const node = this.createNode(title, pos, 0x0A84FF, 'path', i);
+                    const f = i / last;
+                    const color = this.pathColor(f);
+                    const node = this.createNode(title, pos, color, 'path', i);
+                    node.mesh.userData.hopFraction = f;
                     this.pathGroup.add(node.mesh);
                     pathNodes.push(node);
                     this.nodes.push(node);
                 });
 
-                // Connect path nodes with tubes
+                // Connect path nodes with gradient tubes (vertex colors)
                 for (let i = 0; i < pathNodes.length - 1; i++) {
                     const a = pathNodes[i].mesh.position;
                     const b = pathNodes[i + 1].mesh.position;
                     const dist = a.distanceTo(b);
-                    const geometry = new THREE.CylinderGeometry(0.08, 0.08, dist, 8);
-                    const material = new THREE.MeshStandardMaterial({ color: 0x0A84FF, transparent: true, opacity: 0.7 });
+                    const geometry = new THREE.CylinderGeometry(0.08, 0.08, dist, 12, 1, false);
+                    // Vertex colors: top = color of node i+1, bottom = color of node i
+                    const cA = new THREE.Color(pathNodes[i].mesh.userData.color);
+                    const cB = new THREE.Color(pathNodes[i + 1].mesh.userData.color);
+                    const colors = [];
+                    const posAttr = geometry.attributes.position;
+                    // Cylinder is centered at origin along Y; top = +dist/2, bottom = -dist/2
+                    for (let v = 0; v < posAttr.count; v++) {
+                        const y = posAttr.getY(v);
+                        const tt = (y + dist / 2) / dist; // 0 at bottom → 1 at top
+                        const c = cA.clone().lerp(cB, tt);
+                        colors.push(c.r, c.g, c.b);
+                    }
+                    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+                    const material = new THREE.MeshStandardMaterial({
+                        vertexColors: true,
+                        transparent: true,
+                        opacity: 0.85,
+                        roughness: 0.5,
+                    });
                     const edge = new THREE.Mesh(geometry, material);
 
                     const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
@@ -1303,6 +1364,11 @@
                 );
 
                 const results = await Promise.all(requests);
+                const last = Math.max(1, this.lastPath.length - 1);
+
+                // One LineSegments for all neighbor→parent connectors (cheap)
+                const connectorPositions = [];
+                const connectorColors = [];
 
                 results.forEach((res, parentIndex) => {
                     if (res.error) return;
@@ -1310,6 +1376,8 @@
                     if (!parent) return;
 
                     const center = parent.mesh.position.clone();
+                    const hopF = parentIndex / last;
+                    const parentColor = new THREE.Color(parent.mesh.userData.color);
                     const seen = new Set();
 
                     res.neighbors.forEach((title, j) => {
@@ -1327,11 +1395,31 @@
                         );
                         const pos = center.clone().add(offset);
 
-                        const node = this.createNode(title, pos, 0xbf5af2, 'neighbor', parentIndex);
+                        // Neighbor color: blend parent's path color toward amber,
+                        // with per-node jitter for visual variety. Closer to the
+                        // path (smaller r) reads as more saturated/warm.
+                        const jitter = (j % 10) / 10;
+                        const color = this.neighborColor(hopF, jitter);
+                        const node = this.createNode(title, pos, color, 'neighbor', parentIndex);
                         this.cloudGroup.add(node.mesh);
                         this.nodes.push(node);
+
+                        // Connector: from neighbor to its parent path node
+                        const nc = new THREE.Color(color);
+                        connectorPositions.push(center.x, center.y, center.z, pos.x, pos.y, pos.z);
+                        connectorColors.push(parentColor.r, parentColor.g, parentColor.b, nc.r * 0.5, nc.g * 0.5, nc.b * 0.5);
                     });
                 });
+
+                // Build the connector line segments as a single geometry
+                if (connectorPositions.length > 0) {
+                    const geom = new THREE.BufferGeometry();
+                    geom.setAttribute('position', new THREE.Float32BufferAttribute(connectorPositions, 3));
+                    geom.setAttribute('color', new THREE.Float32BufferAttribute(connectorColors, 3));
+                    const mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.25 });
+                    const lines = new THREE.LineSegments(geom, mat);
+                    this.cloudGroup.add(lines);
+                }
             },
 
             toggleCloud() {
@@ -1400,7 +1488,9 @@
                 if (intersects.length > 0) {
                     const obj = intersects[0].object;
                     const title = obj.userData.title.replace(/_/g, ' ');
-                    const kind = obj.userData.kind === 'path' ? 'Path node' : 'Neighbor';
+                    const kind = obj.userData.kind === 'path'
+                        ? `Path node · hop ${obj.userData.parentIndex}`
+                        : 'Neighbor';
                     tooltip.style.display = 'block';
                     tooltip.style.left = event.clientX + 12 + 'px';
                     tooltip.style.top = event.clientY + 12 + 'px';
