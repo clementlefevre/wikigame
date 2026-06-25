@@ -728,11 +728,7 @@
             <p class="setup-sub">Find the shortest click-path between any two Wikipedia articles. First, the graph needs to be built from the latest Wikipedia dump (one-time setup).</p>
 
             <div class="estimates">
-                <strong>Option 1 — Download prebuilt graph (recommended):</strong><br>
-                • Fetches ~5.4 GB of ready-to-use binary files from a mirror<br>
-                • Takes a few minutes depending on your connection<br>
-                <br>
-                <strong>Option 2 — Build from scratch:</strong><br>
+                <strong>One-time setup:</strong><br>
                 • Downloads ~10 GB of Wikipedia SQL dumps<br>
                 • Builds a compressed graph (~5 GB on disk)<br>
                 • Takes 1–3 hours depending on your CPU and disk<br>
@@ -740,7 +736,6 @@
             </div>
 
             <button id="setup-btn" onclick="setup.start()">Download &amp; build graph</button>
-            <button class="secondary" id="fetch-btn" onclick="setup.startFetch()" style="margin-top:0.5rem">Download prebuilt graph (fast)</button>
 
             <div id="setup-progress">
                 <div class="setup-phase" id="setup-phase">Preparing…</div>
@@ -909,38 +904,6 @@
                     this.connectSSE();
                 } catch (e) {
                     this.showError('Network error: ' + e.message);
-                }
-            },
-
-            async startFetch() {
-                const fbtn = document.getElementById('fetch-btn');
-                fbtn.disabled = true;
-                fbtn.textContent = 'Starting…';
-                this.errorEl.textContent = '';
-                this.progress.classList.add('active');
-                this.phaseEl.textContent = 'Fetching prebuilt graph…';
-                this.logEl.textContent = '';
-
-                try {
-                    const r = await fetch('/api/fetch', { method: 'POST' });
-                    if (r.status === 200) {
-                        this.hide();
-                        return;
-                    }
-                    if (r.status === 409) {
-                        // already running; attach
-                    } else if (!r.ok && r.status !== 202) {
-                        const text = await r.text();
-                        this.showError('Failed to start fetch: ' + text);
-                        fbtn.disabled = false;
-                        fbtn.textContent = 'Download prebuilt graph (fast)';
-                        return;
-                    }
-                    this.connectSSE();
-                } catch (e) {
-                    this.showError('Network error: ' + e.message);
-                    fbtn.disabled = false;
-                    fbtn.textContent = 'Download prebuilt graph (fast)';
                 }
             },
 

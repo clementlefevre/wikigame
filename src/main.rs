@@ -1,6 +1,5 @@
 mod build_cmd;
 mod download;
-mod fetch;
 mod graph;
 mod parse;
 mod progress;
@@ -39,15 +38,6 @@ struct Cli {
 enum Commands {
     /// Download the three Wikipedia SQL dumps from Wikimedia (resumes interrupted downloads).
     Download,
-
-    /// Fetch prebuilt graph `.bin` files from a mirror (Cloudflare R2) instead
-    /// of downloading dumps and building locally. Much faster (minutes vs hours).
-    Fetch {
-        /// Mirror base URL. Defaults to the `WIKIGAME_MIRROR_URL` env var, then
-        /// the built-in default.
-        #[arg(long)]
-        base_url: Option<String>,
-    },
 
     /// Parse Wikipedia SQL dumps and build CSR binary files (one-time, ~1-3 h).
     Build {
@@ -96,18 +86,6 @@ fn main() {
                 .build()
                 .unwrap()
                 .block_on(download::download_all(&cli.downloads, &reporter));
-        }
-        Some(Commands::Fetch { base_url }) => {
-            println!("=== wikigame fetch ===");
-            let url = fetch::mirror_url(base_url.as_deref());
-            println!("Mirror: {}", url);
-            let reporter = progress::ProgressReporter::standalone(64);
-            tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .unwrap()
-                .block_on(fetch::fetch_all(&cli.data, &url, &reporter));
-            println!("Done. Graph ready in {:?}.", cli.data);
         }
         Some(Commands::Build {
             no_download,

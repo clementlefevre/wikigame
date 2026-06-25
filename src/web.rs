@@ -86,7 +86,6 @@ pub async fn serve(port: u16, handle: AppHandle) {
         .route("/", get(index_handler))
         .route("/api/status", get(status_handler))
         .route("/api/setup", post(setup_handler))
-        .route("/api/fetch", post(fetch_handler))
         .route("/api/progress", get(progress_handler))
         .route("/api/stats", get(stats_handler))
         .route("/search", post(search_handler))
@@ -188,67 +187,6 @@ async fn setup_handler(State(ws): State<Arc<WebState>>) -> impl IntoResponse {
     });
 
     (StatusCode::ACCEPTED, "Setup started".to_string())
-}
-
-/// Like `setup_handler` but fetches prebuilt `.bin` files from a mirror
-/// (Cloudflare R2) instead of downloading dumps + building locally. Much
-/// faster. Uses the same `Building` state and `/api/progress` SSE stream so
-/// the UI wizard works unchanged.
-async fn fetch_handler(State(ws): State<Arc<WebState>>) -> impl IntoResponse {
-    let mut state = ws.handle.state.lock().await;
-    match &*state {
-        AppState::Building => {
-            return (StatusCode::CONFLICT, "Setup already running".to_string());
-        }
-        AppState::Ready { .. } => {
-            return (StatusCode::OK, "Already ready".to_string());
-        }
-        _ => {}
-    }
-    *state = AppState::Building;
-
-    let handle = ws.handle.clone();
-    std::thread::spawn(move || {
-        let data_dir = handle.data_dir.clone();
-        let reporter = handle.reporter.clone();
-        let url = crate::fetch::mirror_url(None);
-
-        reporter.log("Fetching", format!("Fetching prebuilt graph from {}", url));
-
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("failed to build runtime");
-
-        let result = rt.block_on(async {
-            crate::fetch::fetch_all(&data_dir, &url, &reporter).await
-        });
-
-        rt.block_on(async {
-            let mut state = handle.state.lock().await;
-            // Result is () on success; panics propagate as a panic from
-            // fetch_all (which calls reporter.error + panic). Catch via the
-            // absence of an error.
-            let _ = result;
-            match crate::setup::load_graph(&handle.data_dir) {
-                Some((graph, titles)) => {
-                    reporter.done("Fetched prebuilt graph. Ready to search.");
-                    *state = AppState::Ready {
-                        graph,
-                        titles,
-                        stats: Arc::new(tokio::sync::Mutex::new(None)),
-                    };
-                }
-                None => {
-                    let msg = "Fetch completed but graph files missing or corrupt".to_string();
-                    reporter.error(msg.clone());
-                    *state = AppState::Error(msg);
-                }
-            }
-        });
-    });
-
-    (StatusCode::ACCEPTED, "Fetch started".to_string())
 }
 
 async fn progress_handler(State(ws): State<Arc<WebState>>) -> Response {
