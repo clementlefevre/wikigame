@@ -34,6 +34,7 @@ impl SqlValue {
             _ => None,
         }
     }
+    #[allow(dead_code)]
     pub fn as_str(&self) -> Option<&str> {
         match self {
             SqlValue::Str(s) => Some(s.as_str()),

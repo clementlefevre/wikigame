@@ -2,14 +2,16 @@ mod build_cmd;
 mod download;
 mod graph;
 mod parse;
+mod progress;
 mod search;
+mod setup;
 mod web;
 
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use build_cmd::TitleIndex;
+use setup::AppHandle;
 
 // ── CLI definition ─────────────────────────────────────────────────────────────
 
@@ -19,30 +21,25 @@ use build_cmd::TitleIndex;
     about = "Wikipedia shortest-path finder — bidirectional BFS on the full English Wikipedia link graph"
 )]
 struct Cli {
+    /// Directory for processed graph files.
+    #[arg(long, global = true, default_value = "data/processed")]
+    data: PathBuf,
+
+    /// Directory for downloaded dump files.
+    #[arg(long, global = true, default_value = "data/downloads")]
+    downloads: PathBuf,
+
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
 enum Commands {
     /// Download the three Wikipedia SQL dumps from Wikimedia (resumes interrupted downloads).
-    Download {
-        /// Directory where the .sql.gz files will be saved.
-        #[arg(long, default_value = "data/downloads")]
-        output: PathBuf,
-    },
+    Download,
 
     /// Parse Wikipedia SQL dumps and build CSR binary files (one-time, ~1-3 h).
     Build {
-        /// Directory containing the three .sql.gz dumps.
-        /// If the files are missing, they will be downloaded automatically.
-        #[arg(long, default_value = "data/downloads")]
-        downloads: PathBuf,
-
-        /// Directory where processed binary files will be written.
-        #[arg(long, default_value = "data/processed")]
-        output: PathBuf,
-
         /// Skip downloading even if dump files are absent (fail instead).
         #[arg(long)]
         no_download: bool,
@@ -60,10 +57,6 @@ enum Commands {
         /// Title of the destination article.
         to: Option<String>,
 
-        /// Directory containing processed binary files.
-        #[arg(long, default_value = "data/processed")]
-        data: PathBuf,
-
         /// Stay in a loop so the graph is loaded only once.
         #[arg(long, short = 'i')]
         interactive: bool,
@@ -74,10 +67,6 @@ enum Commands {
         /// Port to listen on.
         #[arg(long, default_value_t = 8080)]
         port: u16,
-
-        /// Directory containing processed binary files.
-        #[arg(long, default_value = "data/processed")]
-        data: PathBuf,
     },
 }
 
@@ -87,50 +76,37 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Download { output } => {
+        None => run_default(cli.data, cli.downloads),
+        Some(Commands::Download) => {
             println!("=== wikigame download ===");
+            let reporter = progress::ProgressReporter::standalone(64);
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .unwrap()
-                .block_on(download::download_all(&output));
+                .block_on(download::download_all(&cli.downloads, &reporter));
         }
-
-        Commands::Build {
-            downloads,
-            output,
-            no_download,
-            keep_dumps,
-        } => {
+        Some(Commands::Build { no_download, keep_dumps }) => {
             println!("=== wikigame build ===");
-            // If a previous build produced edges.tmp + title_index.bin, resume
-            // from CSR construction instead of re-downloading the dumps.
-            let can_resume = output.join("edges.tmp").exists() && output.join("title_index.bin").exists();
-            if !can_resume {
-                if !no_download && !download::all_present(&downloads) {
-                    println!("Dump files not found in {:?}. Downloading now ...", downloads);
-                    tokio::runtime::Builder::new_multi_thread()
-                        .enable_all()
-                        .build()
-                        .unwrap()
-                        .block_on(download::download_all(&downloads));
-                }
-            } else {
-                println!("Found existing edges.tmp and title_index.bin; resuming CSR construction.");
+            let reporter = progress::ProgressReporter::standalone(64);
+            let can_resume = cli.data.join("edges.tmp").exists()
+                && cli.data.join("title_index.bin").exists();
+            if !can_resume && !no_download && !download::all_present(&cli.downloads) {
+                println!("Dump files not found. Downloading now ...");
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(download::download_all(&cli.downloads, &reporter));
+            } else if can_resume {
+                println!("Resuming from edges.tmp + title_index.bin.");
             }
-            build_cmd::run(&downloads, &output, !keep_dumps);
+            build_cmd::run(&cli.downloads, &cli.data, !keep_dumps, &reporter);
         }
-
-        Commands::Search {
-            from,
-            to,
-            data,
-            interactive,
-        } => {
+        Some(Commands::Search { from, to, interactive }) => {
             println!("=== wikigame search ===");
-            let titles = load_title_index(&data);
-            let graph = graph::load(&data);
-
+            let (graph, titles) = setup::load_graph(&cli.data)
+                .unwrap_or_else(|| panic!("Graph not found in {:?}. Run `wikigame` or `wikigame build` first.", cli.data));
             if interactive {
                 run_interactive(&graph, &titles);
             } else {
@@ -145,37 +121,55 @@ fn main() {
                 do_search(&graph, &titles, &from, &to);
             }
         }
-
-        Commands::Serve { port, data } => {
+        Some(Commands::Serve { port }) => {
             println!("=== wikigame serve (port {}) ===", port);
-            let titles = load_title_index(&data);
-            let graph = graph::load(&data);
+            let handle = AppHandle::new(cli.downloads.clone(), cli.data.clone());
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .unwrap()
-                .block_on(web::serve(port, graph, titles));
+                .block_on(async {
+                    try_open_browser(port);
+                    web::serve(port, handle).await;
+                });
         }
     }
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Default flow ───────────────────────────────────────────────────────────────
 
-fn load_title_index(data_dir: &PathBuf) -> TitleIndex {
-    let path = data_dir.join("title_index.bin");
-    let f = std::fs::File::open(&path)
-        .unwrap_or_else(|_| panic!("Cannot open {:?}. Did you run `wikigame build` first?", path));
-    bincode::deserialize_from(std::io::BufReader::new(f))
-        .unwrap_or_else(|e| panic!("Failed to deserialize title_index.bin: {}", e))
+fn run_default(data_dir: PathBuf, downloads_dir: PathBuf) {
+    println!("=== wikigame ===");
+    let port = 8080;
+    let handle = AppHandle::new(downloads_dir, data_dir);
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            try_open_browser(port);
+            web::serve(port, handle).await;
+        });
 }
+
+fn try_open_browser(port: u16) {
+    let url = format!("http://localhost:{}", port);
+    std::thread::spawn(move || {
+        if let Err(e) = open::that(&url) {
+            eprintln!("Could not open browser automatically: {}", e);
+            eprintln!("Open {} in your browser.", url);
+        }
+    });
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 fn do_search(
     graph: &graph::LoadedGraph,
-    titles: &TitleIndex,
+    titles: &build_cmd::TitleIndex,
     from: &str,
     to: &str,
 ) {
-    // Normalise: Wikipedia titles use underscores
     let from_key = from.replace(' ', "_");
     let to_key = to.replace(' ', "_");
 
@@ -213,7 +207,7 @@ fn do_search(
     }
 }
 
-fn run_interactive(graph: &graph::LoadedGraph, titles: &TitleIndex) {
+fn run_interactive(graph: &graph::LoadedGraph, titles: &build_cmd::TitleIndex) {
     use std::io::{self, BufRead, Write};
 
     println!("Interactive mode. Type two article titles, one per prompt. Ctrl-C to quit.\n");
@@ -246,4 +240,3 @@ fn run_interactive(graph: &graph::LoadedGraph, titles: &TitleIndex) {
         println!();
     }
 }
-

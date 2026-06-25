@@ -13,7 +13,8 @@
 use std::path::Path;
 
 use hashbrown::HashMap;
-use indicatif::{ProgressBar, ProgressStyle};
+
+use crate::progress::ProgressReporter;
 
 use super::{rows, SqlValue};
 
@@ -23,14 +24,8 @@ pub struct PageIndex {
     pub title_to_cid: HashMap<String, u32>,
 }
 
-pub fn parse(path: &Path) -> PageIndex {
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.cyan} [{elapsed_precise}] {msg}")
-            .unwrap(),
-    );
-    pb.set_message("Parsing page.sql.gz …");
+pub fn parse(path: &Path, reporter: &ProgressReporter) -> PageIndex {
+    reporter.phase("Parsing", "page.sql.gz …");
 
     let mut wiki_id_to_cid: HashMap<u32, u32> = HashMap::new();
     let mut titles: Vec<String> = Vec::new();
@@ -78,14 +73,11 @@ pub fn parse(path: &Path) -> PageIndex {
         titles.push(title);
 
         if titles.len() % 500_000 == 0 {
-            pb.set_message(format!("Parsing page.sql.gz … {} articles", titles.len()));
+            reporter.progress("Parsing", format!("page.sql.gz — {} articles", titles.len()), titles.len() as u64, 0);
         }
     }
 
-    pb.finish_with_message(format!(
-        "page.sql.gz done — {} main-namespace articles",
-        titles.len()
-    ));
+    reporter.log("Parsing", format!("page.sql.gz done — {} main-namespace articles", titles.len()));
 
     PageIndex {
         wiki_id_to_cid,

@@ -10,16 +10,11 @@
 use std::path::Path;
 
 use hashbrown::HashMap;
-use indicatif::{ProgressBar, ProgressStyle};
 
-pub fn parse(path: &Path, title_to_cid: &HashMap<String, u32>) -> HashMap<u64, u32> {
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.cyan} [{elapsed_precise}] {msg}")
-            .unwrap(),
-    );
-    pb.set_message("Parsing linktarget.sql.gz …");
+use crate::progress::ProgressReporter;
+
+pub fn parse(path: &Path, title_to_cid: &HashMap<String, u32>, reporter: &ProgressReporter) -> HashMap<u64, u32> {
+    reporter.phase("Parsing", "linktarget.sql.gz …");
 
     let mut lt_to_cid: HashMap<u64, u32> = HashMap::new();
     let mut count = 0u64;
@@ -55,14 +50,10 @@ pub fn parse(path: &Path, title_to_cid: &HashMap<String, u32>) -> HashMap<u64, u
 
         count += 1;
         if count % 1_000_000 == 0 {
-            pb.set_message(format!(
-                "Parsing linktarget.sql.gz … {} rows ({} mapped)",
-                count,
-                lt_to_cid.len()
-            ));
+            reporter.progress("Parsing", format!("linktarget.sql.gz — {} rows ({} mapped)", count, lt_to_cid.len()), count, 0);
         }
     }
 
-    pb.finish_with_message(format!("linktarget.sql.gz done — {} link targets mapped", lt_to_cid.len()));
+    reporter.log("Parsing", format!("linktarget.sql.gz done — {} link targets mapped", lt_to_cid.len()));
     lt_to_cid
 }

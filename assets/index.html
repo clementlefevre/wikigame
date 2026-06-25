@@ -287,12 +287,153 @@
             display: none;
             max-width: 250px;
         }
+
+        /* Setup wizard overlay */
+        #setup-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            background: rgba(11, 16, 33, 0.97);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        #setup-overlay.hidden {
+            display: none;
+        }
+
+        .setup-card {
+            width: 100%;
+            max-width: 560px;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        .setup-card h2 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .setup-card h2 span {
+            color: #38bdf8;
+        }
+
+        .setup-card .setup-sub {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
+        }
+
+        .setup-card .estimates {
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 0.6rem;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            text-align: left;
+        }
+
+        .setup-card .estimates strong {
+            color: #e2e8f0;
+        }
+
+        #setup-btn {
+            font-size: 1rem;
+            padding: 0.8rem 1.5rem;
+        }
+
+        #setup-progress {
+            margin-top: 1.5rem;
+            text-align: left;
+            display: none;
+        }
+
+        #setup-progress.active {
+            display: block;
+        }
+
+        .setup-phase {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #38bdf8;
+            margin-bottom: 0.5rem;
+        }
+
+        .setup-bar-wrap {
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 999px;
+            overflow: hidden;
+            height: 10px;
+            margin-bottom: 0.5rem;
+        }
+
+        #setup-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #38bdf8, #7dd3fc);
+            transition: width 0.3s ease;
+        }
+
+        .setup-log {
+            background: rgba(11, 16, 33, 0.6);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 0.5rem;
+            padding: 0.6rem 0.75rem;
+            font-family: ui-monospace, "SF Mono", Menlo, monospace;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            max-height: 180px;
+            overflow-y: auto;
+            margin-top: 0.75rem;
+            white-space: pre-wrap;
+        }
+
+        .setup-error {
+            color: #f87171;
+            font-size: 0.85rem;
+            margin-top: 0.75rem;
+        }
     </style>
 </head>
 
 <body>
     <div id="canvas-container"></div>
     <div class="tooltip" id="tooltip"></div>
+
+    <!-- Setup wizard overlay -->
+    <div id="setup-overlay" class="hidden">
+        <div class="setup-card">
+            <h2>Wiki<span>Golf</span> 3D</h2>
+            <p class="setup-sub">Find the shortest click-path between any two Wikipedia articles. First, the graph needs to be built from the latest Wikipedia dump (one-time setup).</p>
+
+            <div class="estimates">
+                <strong>One-time setup:</strong><br>
+                • Downloads ~10 GB of Wikipedia SQL dumps<br>
+                • Builds a compressed graph (~5 GB on disk)<br>
+                • Takes 1–3 hours depending on your CPU and disk<br>
+                • Needs ~15 GB free disk space during build
+            </div>
+
+            <button id="setup-btn" onclick="setup.start()">Download &amp; build graph</button>
+
+            <div id="setup-progress">
+                <div class="setup-phase" id="setup-phase">Preparing…</div>
+                <div class="setup-bar-wrap"><div id="setup-bar"></div></div>
+                <div id="setup-pct" style="font-size:0.8rem;color:#94a3b8;text-align:center;">0%</div>
+                <div class="setup-log" id="setup-log"></div>
+                <div class="setup-error" id="setup-error"></div>
+            </div>
+        </div>
+    </div>
 
     <div id="search-panel" class="panel">
         <h1>Wiki<span>Golf</span> 3D</h1>
@@ -347,6 +488,185 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        const setup = {
+            overlay: null,
+            btn: null,
+            progress: null,
+            phaseEl: null,
+            barEl: null,
+            pctEl: null,
+            logEl: null,
+            errorEl: null,
+            evtSource: null,
+            done: false,
+
+            init() {
+                this.overlay = document.getElementById('setup-overlay');
+                this.btn = document.getElementById('setup-btn');
+                this.progress = document.getElementById('setup-progress');
+                this.phaseEl = document.getElementById('setup-phase');
+                this.barEl = document.getElementById('setup-bar');
+                this.pctEl = document.getElementById('setup-pct');
+                this.logEl = document.getElementById('setup-log');
+                this.errorEl = document.getElementById('setup-error');
+                this.checkStatus();
+            },
+
+            async checkStatus() {
+                try {
+                    const r = await fetch('/api/status');
+                    const d = await r.json();
+                    if (d.state === 'ready') {
+                        this.hide();
+                    } else if (d.state === 'building') {
+                        this.showBuilding();
+                        this.connectSSE();
+                    } else if (d.state === 'error') {
+                        this.showError(d.message || 'Setup failed.');
+                    } else {
+                        this.showNeedsSetup();
+                    }
+                } catch (e) {
+                    this.showNeedsSetup();
+                }
+            },
+
+            showNeedsSetup() {
+                this.overlay.classList.remove('hidden');
+                this.btn.disabled = false;
+                this.progress.classList.remove('active');
+            },
+
+            showBuilding() {
+                this.overlay.classList.remove('hidden');
+                this.btn.disabled = true;
+                this.btn.textContent = 'Building…';
+                this.progress.classList.add('active');
+            },
+
+            showError(msg) {
+                this.overlay.classList.remove('hidden');
+                this.btn.disabled = false;
+                this.btn.textContent = 'Retry';
+                this.progress.classList.add('active');
+                this.errorEl.textContent = msg;
+            },
+
+            hide() {
+                this.overlay.classList.add('hidden');
+                if (this.evtSource) {
+                    this.evtSource.close();
+                    this.evtSource = null;
+                }
+            },
+
+            async start() {
+                this.btn.disabled = true;
+                this.btn.textContent = 'Starting…';
+                this.errorEl.textContent = '';
+                this.progress.classList.add('active');
+                this.phaseEl.textContent = 'Starting…';
+                this.logEl.textContent = '';
+
+                try {
+                    const r = await fetch('/api/setup', { method: 'POST' });
+                    if (r.status === 200) {
+                        // Already ready.
+                        this.hide();
+                        return;
+                    }
+                    if (r.status === 409) {
+                        // Already running; just attach.
+                    } else if (!r.ok && r.status !== 202) {
+                        const text = await r.text();
+                        this.showError('Failed to start setup: ' + text);
+                        return;
+                    }
+                    this.connectSSE();
+                } catch (e) {
+                    this.showError('Network error: ' + e.message);
+                }
+            },
+
+            connectSSE() {
+                if (this.evtSource) this.evtSource.close();
+                this.btn.textContent = 'Building…';
+                this.evtSource = new EventSource('/api/progress');
+
+                this.evtSource.addEventListener('phase', (e) => this.onEvent(e));
+                this.evtSource.addEventListener('progress', (e) => this.onEvent(e));
+                this.evtSource.addEventListener('log', (e) => this.onEvent(e));
+                this.evtSource.addEventListener('done', (e) => this.onDone(e));
+                this.evtSource.addEventListener('error', (e) => this.onDone(e));
+                this.evtSource.onerror = () => {
+                    // SSE auto-reconnects; only treat as fatal if state is error.
+                };
+            },
+
+            onEvent(e) {
+                let data;
+                try { data = JSON.parse(e.data); } catch { return; }
+                if (data.phase) {
+                    this.phaseEl.textContent = data.phase + (data.message ? ' — ' + data.message : '');
+                }
+                if (data.total && data.total > 0 && data.current != null) {
+                    const pct = Math.min(100, (data.current / data.total) * 100);
+                    this.barEl.style.width = pct.toFixed(1) + '%';
+                    this.pctEl.textContent = pct.toFixed(0) + '%';
+                }
+                if (data.message) {
+                    this.logEl.textContent = data.message + '\n' + this.logEl.textContent;
+                    // Trim log
+                    const lines = this.logEl.textContent.split('\n');
+                    if (lines.length > 50) this.logEl.textContent = lines.slice(0, 50).join('\n');
+                }
+            },
+
+            onDone(e) {
+                let data = {};
+                try { data = JSON.parse(e.data); } catch {}
+                if (data.message) {
+                    this.logEl.textContent = data.message + '\n' + this.logEl.textContent;
+                }
+                this.barEl.style.width = '100%';
+                this.pctEl.textContent = '100%';
+                this.phaseEl.textContent = data.kind === 'error' ? 'Setup failed' : 'Finishing… loading graph';
+                if (data.kind === 'error') {
+                    this.errorEl.textContent = data.message || 'Setup failed.';
+                    this.btn.disabled = false;
+                    this.btn.textContent = 'Retry';
+                    return;
+                }
+                // Poll status until ready (graph load happens after done event).
+                this.pollReady(0);
+            },
+
+            pollReady(attempt) {
+                if (attempt > 60) {
+                    this.phaseEl.textContent = 'Done — reload the page if the UI does not appear.';
+                    return;
+                }
+                setTimeout(async () => {
+                    try {
+                        const r = await fetch('/api/status');
+                        const d = await r.json();
+                        if (d.state === 'ready') {
+                            this.hide();
+                        } else if (d.state === 'error') {
+                            this.showError(d.message || 'Setup failed.');
+                        } else {
+                            this.pollReady(attempt + 1);
+                        }
+                    } catch {
+                        this.pollReady(attempt + 1);
+                    }
+                }, 1000);
+            }
+        };
+
+        setup.init();
+        window.setup = setup;
 
         const app = {
             scene: null,

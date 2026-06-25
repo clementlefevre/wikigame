@@ -20,10 +20,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 
 use crate::parse;
+use crate::progress::ProgressReporter;
 
 // ── Serialisable title index ───────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ pub struct TitleIndex {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-pub fn run(downloads_dir: &Path, output_dir: &Path, delete_dumps: bool) {
+pub fn run(downloads_dir: &Path, output_dir: &Path, delete_dumps: bool, reporter: &ProgressReporter) {
     fs::create_dir_all(output_dir)
         .unwrap_or_else(|e| panic!("Cannot create output dir {:?}: {}", output_dir, e));
 
@@ -46,14 +46,14 @@ pub fn run(downloads_dir: &Path, output_dir: &Path, delete_dumps: bool) {
     // parsing and go straight to CSR construction. This avoids re-downloading the
     // large .gz dumps when a previous build was killed during CSR construction.
     if edges_path.exists() && title_index_path.exists() {
-        println!("  Resuming from existing edges.tmp and title_index.bin");
+        reporter.log("Build", "Resuming from existing edges.tmp and title_index.bin");
         let num_nodes = load_title_index(output_dir).titles.len() as u32;
         let num_edges = edges_path
             .metadata()
             .unwrap_or_else(|e| panic!("Cannot stat {:?}: {}", edges_path, e))
             .len()
             / 8;
-        build_csr(output_dir, &edges_path, num_nodes, num_edges);
+        build_csr(output_dir, &edges_path, num_nodes, num_edges, reporter);
         return;
     }
 
@@ -65,9 +65,9 @@ pub fn run(downloads_dir: &Path, output_dir: &Path, delete_dumps: bool) {
         page_path.display()
     );
 
-    let page_index = parse::page::parse(&page_path);
+    let page_index = parse::page::parse(&page_path, reporter);
     let num_nodes = page_index.titles.len() as u32;
-    println!("  Articles: {}", num_nodes);
+    reporter.log("Build", format!("Articles: {}", num_nodes));
 
     // Persist titles + title_to_cid
     let title_index = TitleIndex {
@@ -75,8 +75,8 @@ pub fn run(downloads_dir: &Path, output_dir: &Path, delete_dumps: bool) {
         title_to_cid: page_index.title_to_cid.clone(),
     };
     write_bincode(output_dir.join("title_index.bin"), &title_index);
-    println!("  Wrote title_index.bin");
-    maybe_delete_dump(&page_path, delete_dumps);
+    reporter.log("Build", "Wrote title_index.bin");
+    maybe_delete_dump(&page_path, delete_dumps, reporter);
 
     // ── Step 2: parse linktarget dump ─────────────────────────────────────────
     let lt_path = downloads_dir.join("enwiki-latest-linktarget.sql.gz");
@@ -85,9 +85,9 @@ pub fn run(downloads_dir: &Path, output_dir: &Path, delete_dumps: bool) {
         "Missing: {}",
         lt_path.display()
     );
-    let lt_to_cid = parse::linktarget::parse(&lt_path, &page_index.title_to_cid);
-    println!("  Link targets mapped: {}", lt_to_cid.len());
-    maybe_delete_dump(&lt_path, delete_dumps);
+    let lt_to_cid = parse::linktarget::parse(&lt_path, &page_index.title_to_cid, reporter);
+    reporter.log("Build", format!("Link targets mapped: {}", lt_to_cid.len()));
+    maybe_delete_dump(&lt_path, delete_dumps, reporter);
 
     // ── Step 3: parse pagelinks, write edges.tmp ──────────────────────────────
     let pl_path = downloads_dir.join("enwiki-latest-pagelinks.sql.gz");
@@ -101,39 +101,40 @@ pub fn run(downloads_dir: &Path, output_dir: &Path, delete_dumps: bool) {
         &edges_path,
         &page_index.wiki_id_to_cid,
         &lt_to_cid,
+        reporter,
     );
-    println!("  Edges written: {}", num_edges);
-    maybe_delete_dump(&pl_path, delete_dumps);
+    reporter.log("Build", format!("Edges written: {}", num_edges));
+    maybe_delete_dump(&pl_path, delete_dumps, reporter);
 
     // Free the big maps — we don't need them anymore.
     drop(lt_to_cid);
     drop(page_index.wiki_id_to_cid);
 
-    build_csr(output_dir, &edges_path, num_nodes, num_edges);
+    build_csr(output_dir, &edges_path, num_nodes, num_edges, reporter);
 }
 
 /// Build CSR binaries from a complete `edges.tmp` file and delete it when done.
-fn build_csr(output_dir: &Path, edges_path: &Path, num_nodes: u32, num_edges: u64) {
+fn build_csr(output_dir: &Path, edges_path: &Path, num_nodes: u32, num_edges: u64, reporter: &ProgressReporter) {
     // ── Pass 1: count degrees ─────────────────────────────────────
-    println!("  Building CSR (pass 1: degree counting) …");
+    reporter.phase("Building CSR", "Pass 1: counting degrees …");
     let mut fwd_degree = vec![0u32; num_nodes as usize + 1];
     let mut bwd_degree = vec![0u32; num_nodes as usize + 1];
     stream_edges(edges_path, num_edges, |src, dst| {
         fwd_degree[src as usize] += 1;
         bwd_degree[dst as usize] += 1;
-    });
+    }, reporter, "CSR pass 1");
 
     // Prefix-sum → offsets arrays (length = num_nodes + 1)
     let fwd_offsets = degree_to_offsets(fwd_degree);
     let bwd_offsets = degree_to_offsets(bwd_degree);
 
     // Write small offsets files early.
-    println!("  Writing CSR offsets …");
+    reporter.log("Building CSR", "Writing CSR offsets …");
     write_u64_array(output_dir.join("fwd_offsets.bin"), &fwd_offsets);
     write_u64_array(output_dir.join("bwd_offsets.bin"), &bwd_offsets);
 
     // Pass 2: build forward columns only (one big array at a time).
-    println!("  Building CSR (pass 2: scatter fill forward) …");
+    reporter.phase("Building CSR", "Pass 2: scatter fill forward …");
     {
         let mut fwd_columns = vec![0u32; num_edges as usize];
         pre_touch_pages(&mut fwd_columns);
@@ -142,12 +143,12 @@ fn build_csr(output_dir: &Path, edges_path: &Path, num_nodes: u32, num_edges: u6
             let fi = fwd_cursor[src as usize] as usize;
             fwd_columns[fi] = dst;
             fwd_cursor[src as usize] += 1;
-        });
+        }, reporter, "CSR pass 2");
         write_u32_array(output_dir.join("fwd_columns.bin"), &fwd_columns);
     } // fwd_columns dropped here
 
     // Pass 3: build backward columns only.
-    println!("  Building CSR (pass 3: scatter fill backward) …");
+    reporter.phase("Building CSR", "Pass 3: scatter fill backward …");
     {
         let mut bwd_columns = vec![0u32; num_edges as usize];
         pre_touch_pages(&mut bwd_columns);
@@ -156,27 +157,19 @@ fn build_csr(output_dir: &Path, edges_path: &Path, num_nodes: u32, num_edges: u6
             let bi = bwd_cursor[dst as usize] as usize;
             bwd_columns[bi] = src;
             bwd_cursor[dst as usize] += 1;
-        });
+        }, reporter, "CSR pass 3");
         write_u32_array(output_dir.join("bwd_columns.bin"), &bwd_columns);
     } // bwd_columns dropped here
 
     // Delete temporary edge file
     fs::remove_file(edges_path).ok();
-    println!("  Deleted edges.tmp");
-    println!("Build complete. Processed files are in {:?}", output_dir);
+    reporter.log("Build", "Deleted edges.tmp");
+    reporter.log("Build", format!("Build complete. Processed files are in {:?}", output_dir));
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-fn stream_edges<F: FnMut(u32, u32)>(path: &Path, num_edges: u64, mut f: F) {
-    let pb = ProgressBar::new(num_edges);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("{spinner:.cyan} [{elapsed_precise}] [{bar:40}] {pos}/{len} edges")
-            .unwrap()
-            .progress_chars("=> "),
-    );
-
+fn stream_edges<F: FnMut(u32, u32)>(path: &Path, num_edges: u64, mut f: F, reporter: &ProgressReporter, phase: &str) {
     let file = File::open(path).unwrap_or_else(|e| panic!("Cannot open edges.tmp: {}", e));
     let mut reader = BufReader::with_capacity(32 * 1024 * 1024, file);
     let mut buf = [0u8; 8];
@@ -193,10 +186,10 @@ fn stream_edges<F: FnMut(u32, u32)>(path: &Path, num_edges: u64, mut f: F) {
         f(src, dst);
         count += 1;
         if count % 10_000_000 == 0 {
-            pb.set_position(count);
+            reporter.progress("Building CSR", format!("{}: {} / {} edges", phase, count, num_edges), count, num_edges);
         }
     }
-    pb.finish_with_message(format!("Streamed {} edges", count));
+    reporter.progress("Building CSR", format!("{}: streamed {} edges", phase, count), count, num_edges);
 }
 
 fn degree_to_offsets(degree: Vec<u32>) -> Vec<u64> {
@@ -241,12 +234,12 @@ fn write_u32_array(path: PathBuf, arr: &[u32]) {
     }
 }
 
-fn maybe_delete_dump(path: &Path, delete: bool) {
+fn maybe_delete_dump(path: &Path, delete: bool, reporter: &ProgressReporter) {
     if delete {
         if let Err(e) = fs::remove_file(path) {
-            eprintln!("  Warning: could not delete {:?}: {}", path, e);
+            reporter.log("Build", format!("Warning: could not delete {:?}: {}", path, e));
         } else {
-            println!("  Deleted {:?}", path);
+            reporter.log("Build", format!("Deleted {:?}", path));
         }
     }
 }

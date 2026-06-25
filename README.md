@@ -20,18 +20,31 @@ Find the shortest path between any two Wikipedia articles using bidirectional BF
 # 1. Build the release binary
 cargo build --release
 
-# 2. Download the Wikipedia dumps (~10 GB, resumes interrupted downloads)
-./target/release/wikigame download
+# 2. Just run it — opens your browser, shows a setup wizard the first time,
+#    downloads + builds the graph with live progress, then starts the search UI.
+./target/release/wikigame
+```
 
-# 3. Parse the dumps and build the graph (one-time, slow).
-#    The raw .sql.gz files are deleted automatically as they are parsed.
-./target/release/wikigame build
+The first launch opens a setup wizard in the browser:
 
-# 4a. Search from the command line
+1. **Download** the three Wikimedia SQL dumps (~10 GB, resumable).
+2. **Build** a compressed sparse row (CSR) graph from the dumps (~1–3 h, with
+   live progress in the browser).
+3. **Cleanup** — raw `.sql.gz` dumps are deleted as they're parsed.
+4. **Search** — the 3D UI loads automatically once the graph is ready.
+
+Subsequent launches skip setup (the graph is already on disk) and go straight
+to the search UI.
+
+### Subcommands
+
+You can also run individual steps directly:
+
+```sh
+./target/release/wikigame download          # download dumps only
+./target/release/wikigame build              # parse + build graph only
 ./target/release/wikigame search "Kevin Bacon" "Philosophy"
-
-# 4b. Or start the web server and open http://localhost:8080
-./target/release/wikigame serve
+./target/release/wikigame serve --port 8080  # start the web server only
 ```
 
 The web UI shows the shortest path as an interactive 3-D scene. Path nodes are drawn in blue, and a cloud of neighboring articles (up to a configurable limit) is drawn in purple around each path node.
@@ -40,8 +53,9 @@ The web UI shows the shortest path as an interactive 3-D scene. Path nodes are d
 
 | Command | Description |
 |---|---|
-| `download [--output <dir>]` | Download the three SQL dumps from Wikimedia. |
-| `build [--downloads <dir>] [--output <dir>] [--no-download] [--keep-dumps]` | Parse dumps and write binary graph files. Use `--keep-dumps` to keep the raw `.sql.gz` files after building. |
+| *(none)* | Default: open browser → setup wizard if needed → search UI. |
+| `download [--downloads <dir>]` | Download the three SQL dumps from Wikimedia. |
+| `build [--downloads <dir>] [--data <dir>] [--no-download] [--keep-dumps]` | Parse dumps and write binary graph files. Use `--keep-dumps` to keep the raw `.sql.gz` files after building. |
 | `search <from> <to> [-i] [--data <dir>]` | Find the shortest path between two articles. Pass `-i` to keep the graph in memory for repeated queries. |
 | `serve [--port <port>] [--data <dir>]` | Start the local web server (default port 8080). |
 
@@ -49,8 +63,11 @@ The web UI shows the shortest path as an interactive 3-D scene. Path nodes are d
 
 | Endpoint | Method | Body | Response |
 |---|---|---|---|
-| `/search` | POST | `{ "from": "...", "to": "..." }` | `{ "path": [...], "hops": N, "ms": N, "error?": "..." }` |
-| `/neighbors` | POST | `{ "title": "...", "limit": 30 }` | `{ "title": "...", "total": N, "neighbors": [...], "error?": "..." }` |
+| `/api/status` | GET | — | `{ "state": "needs_setup" \| "building" \| "ready" \| "error", "message"? }` |
+| `/api/setup` | POST | — | Starts download + build in the background. `202` if started, `409` if already running, `200` if already ready. |
+| `/api/progress` | GET | — | SSE stream of `{ kind, phase, message, current?, total? }` events. |
+| `/search` | POST | `{ "from": "...", "to": "..." }` | `{ "path": [...], "hops": N, "ms": N, "error?": "..." }` (503 unless ready) |
+| `/neighbors` | POST | `{ "title": "...", "limit": 30 }` | `{ "title": "...", "total": N, "neighbors": [...], "error?": "..." }` (503 unless ready) |
 
 ## Resuming a failed build
 

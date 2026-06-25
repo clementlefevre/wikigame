@@ -21,21 +21,17 @@ use std::{
 };
 
 use hashbrown::HashMap;
-use indicatif::{ProgressBar, ProgressStyle};
+
+use crate::progress::ProgressReporter;
 
 pub fn parse_and_write(
     path: &Path,
     edges_path: &Path,
     wiki_id_to_cid: &HashMap<u32, u32>,
     lt_to_cid: &HashMap<u64, u32>,
+    reporter: &ProgressReporter,
 ) -> u64 {
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.cyan} [{elapsed_precise}] {msg}")
-            .unwrap(),
-    );
-    pb.set_message("Parsing pagelinks.sql.gz …");
+    reporter.phase("Parsing", "pagelinks.sql.gz …");
 
     let out_file = File::create(edges_path)
         .unwrap_or_else(|e| panic!("Cannot create {:?}: {}", edges_path, e));
@@ -95,19 +91,13 @@ pub fn parse_and_write(
         written += 1;
 
         if total_rows % 5_000_000 == 0 {
-            pb.set_message(format!(
-                "Parsing pagelinks.sql.gz … {} rows, {} edges written",
-                total_rows, written
-            ));
+            reporter.progress("Parsing", format!("pagelinks.sql.gz — {} rows, {} edges written", total_rows, written), total_rows, 0);
         }
     }
 
     writer.flush().expect("flush edges.tmp");
 
-    pb.finish_with_message(format!(
-        "pagelinks.sql.gz done — {} edges written ({} rows processed)",
-        written, total_rows
-    ));
+    reporter.log("Parsing", format!("pagelinks.sql.gz done — {} edges written ({} rows processed)", written, total_rows));
 
     written
 }
