@@ -47,8 +47,54 @@ struct NeighborsRequest {
     limit: usize,
 }
 
+#[derive(Deserialize)]
+struct EgoRequest {
+    title: String,
+    #[serde(default = "default_ego_hops")]
+    hops: u8,
+    #[serde(default = "default_ego_limit")]
+    limit: usize,
+}
+
+#[derive(Deserialize)]
+struct BfsTraceRequest {
+    from: String,
+    to: String,
+    #[serde(default = "default_bfs_max_nodes")]
+    max_nodes: usize,
+}
+
+#[derive(Deserialize)]
+struct FirstLinkRequest {
+    title: String,
+    #[serde(default = "default_first_link_target")]
+    target: String,
+    #[serde(default = "default_first_link_max_steps")]
+    max_steps: usize,
+}
+
 fn default_neighbor_limit() -> usize {
     40
+}
+
+fn default_ego_hops() -> u8 {
+    1
+}
+
+fn default_ego_limit() -> usize {
+    50
+}
+
+fn default_bfs_max_nodes() -> usize {
+    5000
+}
+
+fn default_first_link_target() -> String {
+    "Philosophy".to_string()
+}
+
+fn default_first_link_max_steps() -> usize {
+    30
 }
 
 #[derive(Serialize)]
@@ -56,6 +102,12 @@ struct SearchResponse {
     path: Vec<String>,
     hops: usize,
     ms: u64,
+    /// PageRank of each path node (normalised, sums to ~1 across the whole graph).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pagerank: Option<Vec<f32>>,
+    /// In-degree of each path node.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path_degrees: Option<Vec<usize>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
 }
@@ -76,6 +128,11 @@ struct StatusResponse {
     message: Option<String>,
 }
 
+#[derive(Serialize)]
+struct ErrorResponse {
+    error: String,
+}
+
 pub async fn serve(port: u16, handle: AppHandle) {
     let handle = Arc::new(handle);
     let state = Arc::new(WebState {
@@ -90,6 +147,9 @@ pub async fn serve(port: u16, handle: AppHandle) {
         .route("/api/stats", get(stats_handler))
         .route("/search", post(search_handler))
         .route("/neighbors", post(neighbors_handler))
+        .route("/api/ego", post(ego_handler))
+        .route("/api/bfs-trace", post(bfs_trace_handler))
+        .route("/api/first-link", get(first_link_handler))
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -165,6 +225,7 @@ async fn setup_handler(State(ws): State<Arc<WebState>>) -> impl IntoResponse {
                             graph,
                             titles,
                             stats: Arc::new(tokio::sync::Mutex::new(None)),
+                            pagerank: Arc::new(tokio::sync::Mutex::new(None)),
                         };
                     }
                     None => {
@@ -211,33 +272,118 @@ async fn search_handler(
     State(ws): State<Arc<WebState>>,
     Json(req): Json<SearchRequest>,
 ) -> Response {
-    let state = ws.handle.state.lock().await;
-    let (graph, titles) = match &*state {
-        AppState::Ready { graph, titles, .. } => (graph.clone(), titles.clone()),
-        _ => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(SearchResponse {
-                    path: vec![],
-                    hops: 0,
-                    ms: 0,
-                    error: Some("Graph not ready yet.".into()),
-                }),
-            )
-                .into_response();
+    let (graph, titles, pagerank_lock) = {
+        let state = ws.handle.state.lock().await;
+        match &*state {
+            AppState::Ready {
+                graph,
+                titles,
+                pagerank,
+                ..
+            } => (graph.clone(), titles.clone(), pagerank.clone()),
+            _ => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(SearchResponse {
+                        path: vec![],
+                        hops: 0,
+                        ms: 0,
+                        pagerank: None,
+                        path_degrees: None,
+                        error: Some("Graph not ready yet.".into()),
+                    }),
+                )
+                    .into_response();
+            }
         }
     };
-    drop(state);
-    let result =
-        tokio::task::spawn_blocking(move || do_search(&graph, &titles, &req.from, &req.to))
-            .await
-            .unwrap_or_else(|e| SearchResponse {
-                path: vec![],
-                hops: 0,
-                ms: 0,
-                error: Some(format!("Internal error: {}", e)),
-            });
-    Json(result).into_response()
+
+    // Fast path: pagerank already cached.
+    let pr_cache: Option<Arc<Vec<f32>>> = {
+        let guard = pagerank_lock.lock().await;
+        guard.clone()
+    };
+
+    // If not cached, kick off computation (we'll await it). We do this in
+    // parallel with the path search so neither blocks the other.
+    let pr_lock = pagerank_lock.clone();
+    let pr_graph = graph.clone();
+    let pr_task = tokio::task::spawn_blocking(move || {
+        // Double-check under lock.
+        {
+            let guard = pr_lock.blocking_lock();
+            if let Some(cached) = guard.as_ref() {
+                return cached.clone();
+            }
+        }
+        // Compute and cache.
+        let computed = Arc::new(stats::pagerank(&pr_graph.forward));
+        let mut guard = pr_lock.blocking_lock();
+        if guard.is_none() {
+            *guard = Some(computed.clone());
+            computed
+        } else {
+            guard.as_ref().unwrap().clone()
+        }
+    });
+
+    let path_task = tokio::task::spawn_blocking(move || {
+        do_search(&graph, &titles, &req.from, &req.to)
+    });
+
+    let path_result = path_task
+        .await
+        .unwrap_or_else(|e| SearchResponse {
+            path: vec![],
+            hops: 0,
+            ms: 0,
+            pagerank: None,
+            path_degrees: None,
+            error: Some(format!("Internal error: {}", e)),
+        });
+
+    // If the search failed, don't bother awaiting pagerank.
+    if path_result.error.is_some() {
+        return Json(path_result).into_response();
+    }
+
+    let ranks = if let Some(c) = pr_cache {
+        c
+    } else {
+        pr_task.await.unwrap_or_default()
+    };
+
+    // Augment the response with per-node pagerank + in-degree.
+    //
+    // We need the titles table and backward graph again to resolve cids and
+    // compute in-degrees. The titles Arc was moved into the path task, so we
+    // re-fetch from the global state (cheap — it's an Arc clone).
+    let (graph_for_deg, titles_for_lookup) = {
+        let state = ws.handle.state.lock().await;
+        match &*state {
+            AppState::Ready { graph, titles, .. } => (graph.clone(), titles.clone()),
+            _ => return Json(path_result).into_response(),
+        }
+    };
+
+    let mut pr_vals: Vec<f32> = Vec::with_capacity(path_result.path.len());
+    let mut deg_vals: Vec<usize> = Vec::with_capacity(path_result.path.len());
+    for title in &path_result.path {
+        let key = title.replace(' ', "_");
+        let cid = titles_for_lookup.title_to_cid.get(&key).copied();
+        if let Some(c) = cid {
+            pr_vals.push(ranks.get(c as usize).copied().unwrap_or(0.0));
+            deg_vals.push(graph_for_deg.backward.neighbors(c).len());
+        } else {
+            pr_vals.push(0.0);
+            deg_vals.push(0);
+        }
+    }
+
+    let mut response = path_result;
+    response.pagerank = Some(pr_vals);
+    response.path_degrees = Some(deg_vals);
+    Json(response).into_response()
 }
 
 fn do_search(graph: &LoadedGraph, titles: &TitleIndex, from: &str, to: &str) -> SearchResponse {
@@ -251,6 +397,8 @@ fn do_search(graph: &LoadedGraph, titles: &TitleIndex, from: &str, to: &str) -> 
                 path: vec![],
                 hops: 0,
                 ms: 0,
+                pagerank: None,
+                path_degrees: None,
                 error: Some(format!("Article not found: \"{}\"", from)),
             };
         }
@@ -262,6 +410,8 @@ fn do_search(graph: &LoadedGraph, titles: &TitleIndex, from: &str, to: &str) -> 
                 path: vec![],
                 hops: 0,
                 ms: 0,
+                pagerank: None,
+                path_degrees: None,
                 error: Some(format!("Article not found: \"{}\"", to)),
             };
         }
@@ -284,6 +434,8 @@ fn do_search(graph: &LoadedGraph, titles: &TitleIndex, from: &str, to: &str) -> 
                 path: path_titles,
                 hops: result.hops,
                 ms: result.elapsed_ms,
+                pagerank: None,
+                path_degrees: None,
                 error: None,
             }
         }
@@ -291,6 +443,8 @@ fn do_search(graph: &LoadedGraph, titles: &TitleIndex, from: &str, to: &str) -> 
             path: vec![],
             hops: 0,
             ms: 0,
+            pagerank: None,
+            path_degrees: None,
             error: Some("No path found between the two articles.".to_string()),
         },
     }
@@ -331,7 +485,6 @@ async fn neighbors_handler(
             });
     Json(result).into_response()
 }
-
 fn do_neighbors(
     graph: &LoadedGraph,
     titles: &TitleIndex,
@@ -383,6 +536,7 @@ async fn stats_handler(State(ws): State<Arc<WebState>>) -> Response {
                 graph,
                 titles,
                 stats,
+                ..
             } => (graph.clone(), titles.clone(), stats.clone()),
             _ => {
                 return (
@@ -413,4 +567,235 @@ async fn stats_handler(State(ws): State<Arc<WebState>>) -> Response {
         *guard = Some(cached.clone());
     }
     Json((**guard.as_ref().unwrap()).clone()).into_response()
+}
+
+// ── Ego network ──────────────────────────────────────────────────────────────
+
+async fn ego_handler(
+    State(ws): State<Arc<WebState>>,
+    Json(req): Json<EgoRequest>,
+) -> Response {
+    let (graph, titles) = {
+        let state = ws.handle.state.lock().await;
+        match &*state {
+            AppState::Ready { graph, titles, .. } => (graph.clone(), titles.clone()),
+            _ => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(ErrorResponse {
+                        error: "Graph not ready yet.".into(),
+                    }),
+                )
+                    .into_response();
+            }
+        }
+    };
+
+    let title = req.title.clone();
+    let hops = req.hops;
+    let limit = req.limit;
+    let result = tokio::task::spawn_blocking(move || {
+        do_ego(&graph, &titles, &title, hops, limit)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(ego)) => Json(ego).into_response(),
+        Ok(Err(resp)) => *resp,
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Internal error: {}", e),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+fn do_ego(
+    graph: &LoadedGraph,
+    titles: &TitleIndex,
+    title: &str,
+    hops: u8,
+    limit: usize,
+) -> Result<stats::EgoNetwork, Box<Response>> {
+    let key = title.replace(' ', "_");
+    let cid = match titles.title_to_cid.get(&key) {
+        Some(&c) => c,
+        None => {
+            return Err(Box::new(
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: format!("Article not found: \"{}\"", title),
+                    }),
+                )
+                    .into_response(),
+            ));
+        }
+    };
+    Ok(stats::ego_network(graph, &titles.titles, cid, hops, limit))
+}
+
+// ── BFS frontier trace ───────────────────────────────────────────────────────
+
+async fn bfs_trace_handler(
+    State(ws): State<Arc<WebState>>,
+    Json(req): Json<BfsTraceRequest>,
+) -> Response {
+    let (graph, titles) = {
+        let state = ws.handle.state.lock().await;
+        match &*state {
+            AppState::Ready { graph, titles, .. } => (graph.clone(), titles.clone()),
+            _ => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(ErrorResponse {
+                        error: "Graph not ready yet.".into(),
+                    }),
+                )
+                    .into_response();
+            }
+        }
+    };
+
+    let from = req.from.clone();
+    let to = req.to.clone();
+    let max_nodes = req.max_nodes;
+    let result = tokio::task::spawn_blocking(move || {
+        do_bfs_trace(&graph, &titles, &from, &to, max_nodes)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(trace)) => Json(trace).into_response(),
+        Ok(Err(resp)) => *resp,
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Internal error: {}", e),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+fn do_bfs_trace(
+    graph: &LoadedGraph,
+    titles: &TitleIndex,
+    from: &str,
+    to: &str,
+    max_nodes: usize,
+) -> Result<stats::BfsTrace, Box<Response>> {
+    let from_key = from.replace(' ', "_");
+    let to_key = to.replace(' ', "_");
+    let start_cid = match titles.title_to_cid.get(&from_key) {
+        Some(&c) => c,
+        None => {
+            return Err(Box::new(
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: format!("Article not found: \"{}\"", from),
+                    }),
+                )
+                    .into_response(),
+            ));
+        }
+    };
+    let end_cid = match titles.title_to_cid.get(&to_key) {
+        Some(&c) => c,
+        None => {
+            return Err(Box::new(
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: format!("Article not found: \"{}\"", to),
+                    }),
+                )
+                    .into_response(),
+            ));
+        }
+    };
+    Ok(stats::bfs_trace(
+        graph,
+        &titles.titles,
+        start_cid,
+        end_cid,
+        max_nodes,
+    ))
+}
+
+// ── First-link chain (Road to Philosophy) ────────────────────────────────────
+
+async fn first_link_handler(
+    State(ws): State<Arc<WebState>>,
+    axum::extract::Query(req): axum::extract::Query<FirstLinkRequest>,
+) -> Response {
+    let (graph, titles) = {
+        let state = ws.handle.state.lock().await;
+        match &*state {
+            AppState::Ready { graph, titles, .. } => (graph.clone(), titles.clone()),
+            _ => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(ErrorResponse {
+                        error: "Graph not ready yet.".into(),
+                    }),
+                )
+                    .into_response();
+            }
+        }
+    };
+
+    let title = req.title.clone();
+    let target = req.target.clone();
+    let max_steps = req.max_steps;
+    let result = tokio::task::spawn_blocking(move || {
+        do_first_link(&graph, &titles, &title, &target, max_steps)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(chain)) => Json(chain).into_response(),
+        Ok(Err(resp)) => *resp,
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Internal error: {}", e),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+fn do_first_link(
+    graph: &LoadedGraph,
+    titles: &TitleIndex,
+    title: &str,
+    target: &str,
+    max_steps: usize,
+) -> Result<stats::FirstLinkChain, Box<Response>> {
+    let key = title.replace(' ', "_");
+    let cid = match titles.title_to_cid.get(&key) {
+        Some(&c) => c,
+        None => {
+            return Err(Box::new(
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: format!("Article not found: \"{}\"", title),
+                    }),
+                )
+                    .into_response(),
+            ));
+        }
+    };
+    Ok(stats::first_link_chain(
+        &graph.forward,
+        &titles.titles,
+        cid,
+        target,
+        max_steps,
+    ))
 }

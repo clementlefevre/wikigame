@@ -78,6 +78,8 @@ pub enum AppState {
         graph: Arc<LoadedGraph>,
         titles: Arc<TitleIndex>,
         stats: Arc<tokio::sync::Mutex<Option<Arc<GraphStats>>>>,
+        /// Lazy-computed global PageRank vector (one f32 per node, normalised).
+        pagerank: Arc<tokio::sync::Mutex<Option<Arc<Vec<f32>>>>>,
     },
     Error(String),
 }
@@ -106,6 +108,7 @@ impl AppHandle {
                     graph,
                     titles,
                     stats: Arc::new(tokio::sync::Mutex::new(None)),
+                    pagerank: Arc::new(tokio::sync::Mutex::new(None)),
                 },
                 None => AppState::NeedsSetup,
             }
