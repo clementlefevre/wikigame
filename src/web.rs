@@ -146,6 +146,7 @@ pub async fn serve(port: u16, handle: AppHandle) {
         .route("/api/progress", get(progress_handler))
         .route("/api/stats", get(stats_handler))
         .route("/api/pagerank", get(pagerank_handler))
+        .route("/api/separation", get(separation_handler))
         .route("/search", post(search_handler))
         .route("/neighbors", post(neighbors_handler))
         .route("/api/ego", post(ego_handler))
@@ -616,6 +617,44 @@ async fn pagerank_handler(State(ws): State<Arc<WebState>>) -> Response {
         "top": top,
     }))
     .into_response()
+}
+
+async fn separation_handler(State(ws): State<Arc<WebState>>) -> Response {
+    let (graph, stats_lock) = {
+        let state = ws.handle.state.lock().await;
+        match &*state {
+            AppState::Ready {
+                graph,
+                stats,
+                ..
+            } => (graph.clone(), stats.clone()),
+            _ => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({ "error": "Graph not ready yet." })),
+                )
+                    .into_response();
+            }
+        }
+    };
+
+    let buckets = tokio::task::spawn_blocking(move || {
+        stats::compute_separation(&graph)
+    })
+    .await
+    .unwrap_or_default();
+
+    // Merge into cached stats if present.
+    {
+        let mut guard = stats_lock.lock().await;
+        if let Some(cached) = guard.as_mut() {
+            let mut updated = (**cached).clone();
+            updated.separation_distribution = buckets.clone();
+            *cached = Arc::new(updated);
+        }
+    }
+
+    Json(serde_json::json!({ "separation_distribution": buckets })).into_response()
 }
 
 // ── Ego network ──────────────────────────────────────────────────────────────

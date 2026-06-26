@@ -1491,19 +1491,20 @@
                         content.innerHTML = `<div class="stats-loading" style="color:#ff453a">${d.error}</div>`;
                         return;
                     }
-                    // PageRank top-N is empty initially; show a placeholder
-                    // and kick off a background fetch for it.
+                    // PageRank and separation distribution are computed
+                    // lazily — show placeholders and kick off background fetches.
                     d.top_pagerank = [];
+                    d.separation_distribution = [];
                     this.renderStats(d);
                     this.statsLoaded = true;
                     this.loadPagerank();
+                    this.loadSeparation();
                 } catch (e) {
                     content.innerHTML = `<div class="stats-loading" style="color:#ff453a">Failed to load stats: ${e.message}</div>`;
                 }
             },
 
             async loadPagerank() {
-                const card = document.querySelector('#stats-content .stats-card:nth-of-type(3) .stats-loading');
                 try {
                     const r = await fetch('/api/pagerank');
                     const d = await r.json();
@@ -1512,7 +1513,24 @@
                         if (el) el.innerHTML = this.pagerankList(d.top);
                     }
                 } catch (e) {
-                    if (card) card.textContent = 'PageRank computation timed out.';
+                    const el = document.querySelector('#stats-content .pr-list');
+                    if (el) el.innerHTML = '<div class="stats-loading" style="color:#ff453a">PageRank computation timed out.</div>';
+                }
+            },
+
+            async loadSeparation() {
+                try {
+                    const r = await fetch('/api/separation');
+                    const d = await r.json();
+                    if (d.separation_distribution && d.separation_distribution.length) {
+                        const el = document.querySelector('#stats-content .sep-hist');
+                        if (el) el.innerHTML = this.separationHistogram(d.separation_distribution);
+                        const cap = document.querySelector('#stats-content .sep-caption');
+                        if (cap) cap.textContent = `Sampled ${this.fmtNum(d.separation_distribution.reduce((s,b)=>s+b.count,0))} random article pairs. Most are 3–5 clicks apart — the "small world" of Wikipedia.`;
+                    }
+                } catch (e) {
+                    const el = document.querySelector('#stats-content .sep-hist');
+                    if (el) el.innerHTML = '<div class="stats-loading" style="color:#ff453a">Separation computation timed out.</div>';
                 }
             },
 
@@ -1615,8 +1633,8 @@
 
                     <div class="stats-card full">
                         <h3>Degrees of separation — random-pair shortest paths</h3>
-                        <p class="stats-caption">Sampled ${this.fmtNum(d.separation_distribution.reduce((s,b)=>s+b.count,0))} random article pairs. Most are 3–5 clicks apart — the "small world" of Wikipedia.</p>
-                        ${d.separation_distribution && d.separation_distribution.length ? this.separationHistogram(d.separation_distribution) : '<div class="stats-loading">Computing…</div>'}
+                        <p class="stats-caption sep-caption">Sampling random article pairs to measure the "small world" of Wikipedia…</p>
+                        ${d.separation_distribution && d.separation_distribution.length ? `<div class="sep-hist">${this.separationHistogram(d.separation_distribution)}</div>` : '<div class="sep-hist"><div class="stats-loading"><span class="spinner"></span>Computing separation distribution (may take a minute)…</div></div>'}
                     </div>
 
                     <div class="stats-card full">
@@ -1830,11 +1848,17 @@
                 while (group.children.length > 0) {
                     const obj = group.children[0];
                     group.remove(obj);
-                    if (obj.geometry) obj.geometry.dispose();
-                    if (obj.material) {
-                        if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
-                        else obj.material.dispose();
-                    }
+                    // Recursively dispose and remove CSS2DObject label DOM elements.
+                    obj.traverse(child => {
+                        if (child.isCSS2DObject && child.element && child.element.parentNode) {
+                            child.element.parentNode.removeChild(child.element);
+                        }
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                            else child.material.dispose();
+                        }
+                    });
                 }
             },
 
