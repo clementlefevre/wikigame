@@ -80,7 +80,7 @@ const SEP_SAMPLES: usize = 2000;
 
 /// PageRank damping factor and iteration count.
 const PR_DAMPING: f64 = 0.85;
-const PR_ITERS: usize = 30;
+const PR_ITERS: usize = 20;
 
 /// Compute the full stats payload.
 ///
@@ -89,7 +89,18 @@ const PR_ITERS: usize = 30;
 /// hub nodes and buckets the reached nodes by distance. The separation
 /// distribution runs `SEP_SAMPLES` random-pair bidirectional BFS queries.
 /// PageRank runs `PR_ITERS` power iterations on the forward CSR.
-pub fn compute(graph: &LoadedGraph, titles: &[String]) -> GraphStats {
+///
+/// If `pagerank_cache` is `Some`, the PageRank vector is reused instead of
+/// being recomputed (the stats endpoint and the search endpoint both need
+/// PageRank, so we share the work).
+///
+/// Returns the stats payload *and* the full per-node PageRank vector (so the
+/// caller can cache it for the /search endpoint).
+pub fn compute(
+    graph: &LoadedGraph,
+    titles: &[String],
+    pagerank_cache: Option<&[f32]>,
+) -> (GraphStats, Vec<f32>) {
     let num_nodes = node_count(&graph.forward);
     let num_edges = edge_count(&graph.forward);
 
@@ -114,10 +125,13 @@ pub fn compute(graph: &LoadedGraph, titles: &[String]) -> GraphStats {
 
     let separation_distribution = separation_distribution(graph);
 
-    let pagerank = pagerank(&graph.forward);
+    let pagerank: Vec<f32> = match pagerank_cache {
+        Some(c) => c.to_vec(),
+        None => pagerank(&graph.forward),
+    };
     let top_pagerank = top_pagerank(&pagerank, titles, TOP_N);
 
-    GraphStats {
+    let stats = GraphStats {
         num_nodes,
         num_edges,
         density,
@@ -132,7 +146,8 @@ pub fn compute(graph: &LoadedGraph, titles: &[String]) -> GraphStats {
         hop_distribution,
         separation_distribution,
         top_pagerank,
-    }
+    };
+    (stats, pagerank)
 }
 
 fn node_count(csr: &WikiCsr) -> u64 {

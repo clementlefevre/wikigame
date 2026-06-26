@@ -298,34 +298,16 @@ async fn search_handler(
         }
     };
 
-    // Fast path: pagerank already cached.
+    // Fast path: pagerank already cached (computed by /api/stats).
+    // We do NOT trigger pagerank computation from /search — it's a multi-minute
+    // O(iters * E) job that would peg a CPU core and risk OOM. The /api/stats
+    // endpoint is responsible for computing and caching it; until then, /search
+    // returns paths without authority data (the `pagerank` field is omitted and
+    // the UI handles its absence gracefully).
     let pr_cache: Option<Arc<Vec<f32>>> = {
         let guard = pagerank_lock.lock().await;
         guard.clone()
     };
-
-    // If not cached, kick off computation (we'll await it). We do this in
-    // parallel with the path search so neither blocks the other.
-    let pr_lock = pagerank_lock.clone();
-    let pr_graph = graph.clone();
-    let pr_task = tokio::task::spawn_blocking(move || {
-        // Double-check under lock.
-        {
-            let guard = pr_lock.blocking_lock();
-            if let Some(cached) = guard.as_ref() {
-                return cached.clone();
-            }
-        }
-        // Compute and cache.
-        let computed = Arc::new(stats::pagerank(&pr_graph.forward));
-        let mut guard = pr_lock.blocking_lock();
-        if guard.is_none() {
-            *guard = Some(computed.clone());
-            computed
-        } else {
-            guard.as_ref().unwrap().clone()
-        }
-    });
 
     let path_task = tokio::task::spawn_blocking(move || {
         do_search(&graph, &titles, &req.from, &req.to)
@@ -342,22 +324,19 @@ async fn search_handler(
             error: Some(format!("Internal error: {}", e)),
         });
 
-    // If the search failed, don't bother awaiting pagerank.
+    // If the search failed, return as-is.
     if path_result.error.is_some() {
         return Json(path_result).into_response();
     }
 
-    let ranks = if let Some(c) = pr_cache {
-        c
-    } else {
-        pr_task.await.unwrap_or_default()
+    // If pagerank isn't ready yet, return the path without authority data.
+    // The UI handles a missing `pagerank` field gracefully.
+    let ranks = match pr_cache {
+        Some(c) => c,
+        None => return Json(path_result).into_response(),
     };
 
     // Augment the response with per-node pagerank + in-degree.
-    //
-    // We need the titles table and backward graph again to resolve cids and
-    // compute in-degrees. The titles Arc was moved into the path task, so we
-    // re-fetch from the global state (cheap — it's an Arc clone).
     let (graph_for_deg, titles_for_lookup) = {
         let state = ws.handle.state.lock().await;
         match &*state {
@@ -529,15 +508,16 @@ fn do_neighbors(
 
 async fn stats_handler(State(ws): State<Arc<WebState>>) -> Response {
     // Grab the graph + titles (and the stats cache lock) under the state mutex.
-    let (graph, titles, stats_lock) = {
+    let (graph, titles, stats_lock, pagerank_lock) = {
         let state = ws.handle.state.lock().await;
         match &*state {
             AppState::Ready {
                 graph,
                 titles,
                 stats,
+                pagerank,
                 ..
-            } => (graph.clone(), titles.clone(), stats.clone()),
+            } => (graph.clone(), titles.clone(), stats.clone(), pagerank.clone()),
             _ => {
                 return (
                     StatusCode::SERVICE_UNAVAILABLE,
@@ -556,10 +536,30 @@ async fn stats_handler(State(ws): State<Arc<WebState>>) -> Response {
         }
     }
 
+    // If pagerank is already cached (e.g. computed by a prior /search call),
+    // reuse it instead of recomputing inside stats::compute.
+    let pr_cache: Option<Arc<Vec<f32>>> = {
+        let guard = pagerank_lock.lock().await;
+        guard.clone()
+    };
+    let pr_was_cached = pr_cache.is_some();
+
     // Slow path: compute on a blocking thread, then cache.
-    let computed = tokio::task::spawn_blocking(move || stats::compute(&graph, &titles.titles))
-        .await
-        .unwrap_or_else(|_| GraphStats::default());
+    let (computed, pr_vector) = tokio::task::spawn_blocking(move || {
+        stats::compute(&graph, &titles.titles, pr_cache.as_ref().map(|v| v.as_slice()))
+    })
+    .await
+    .unwrap_or_else(|_| (GraphStats::default(), Vec::new()));
+
+    // Cache the full pagerank vector (if it was freshly computed) so the
+    // /search endpoint can augment its responses with per-node authority.
+    if !pr_was_cached && !pr_vector.is_empty() {
+        let mut guard = pagerank_lock.lock().await;
+        if guard.is_none() {
+            *guard = Some(Arc::new(pr_vector));
+        }
+    }
+
     let cached = Arc::new(computed);
 
     let mut guard = stats_lock.lock().await;

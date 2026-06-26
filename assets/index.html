@@ -698,6 +698,7 @@
 
         .bar-fill.out { background: #bf5af2; }
         .bar-fill.dead { background: #ff9f0a; }
+        .bar-fill.pr { background: linear-gradient(90deg, #0A84FF, #bf5af2); }
 
         .bar-row .val {
             width: 56px;
@@ -809,6 +810,262 @@
             border-top: none;
         }
 
+        .stats-caption {
+            color: var(--text-dim);
+            font-size: 0.74rem;
+            line-height: 1.5;
+            margin-bottom: 10px;
+            letter-spacing: -0.01em;
+        }
+
+        /* Road to Philosophy chain */
+        .philosophy-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .philosophy-controls input[type=text] {
+            flex: 1;
+            margin: 0;
+        }
+
+        .philosophy-controls button {
+            width: auto;
+            margin: 0;
+            padding: 9px 14px;
+        }
+
+        .philosophy-status {
+            display: inline-block;
+            font-size: 0.74rem;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: var(--field-bg);
+            margin-bottom: 10px;
+        }
+
+        .philosophy-status.ok { background: rgba(48, 209, 88, 0.2); color: #30d158; }
+        .philosophy-status.warn { background: rgba(255, 159, 10, 0.2); color: #ff9f0a; }
+        .philosophy-status.err { background: rgba(255, 69, 58, 0.2); color: #ff453a; }
+
+        .philosophy-chain {
+            list-style: none;
+            counter-reset: step;
+        }
+
+        .philosophy-chain li {
+            counter-increment: step;
+            position: relative;
+            padding: 5px 0 5px 28px;
+            font-size: 0.82rem;
+        }
+
+        .philosophy-chain li::before {
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            top: 5px;
+            width: 20px;
+            height: 20px;
+            background: var(--field-bg);
+            border-radius: 50%;
+            color: var(--text-dim);
+            font-size: 0.66rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .philosophy-chain li a {
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .philosophy-chain li a:hover {
+            color: var(--accent);
+            text-decoration: underline;
+        }
+
+        .philosophy-chain li.philosophy-target {
+            background: rgba(48, 209, 88, 0.12);
+            border-radius: 8px;
+            padding-left: 32px;
+        }
+
+        .philosophy-chain li.philosophy-target a {
+            color: #30d158;
+            font-weight: 600;
+        }
+
+        /* ── Play view ──────────────────────────────────────────── */
+
+        #play-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 25;
+            overflow-y: auto;
+            padding: 64px 16px 16px;
+            display: none;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        #play-overlay.active {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .play-grid {
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 900px) {
+            .play-grid { grid-template-columns: 1fr; }
+        }
+
+        .play-card {
+            background: var(--panel-bg);
+            backdrop-filter: blur(24px) saturate(160%);
+            -webkit-backdrop-filter: blur(24px) saturate(160%);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius);
+            padding: 18px;
+            box-shadow: var(--shadow);
+        }
+
+        .play-card h3 {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+        }
+
+        .play-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .play-controls input[type=text] {
+            flex: 1;
+            min-width: 120px;
+            margin: 0;
+        }
+
+        .play-controls input[type=number] {
+            width: 70px;
+            margin: 0;
+        }
+
+        .play-controls button {
+            width: auto;
+            margin: 0;
+            padding: 9px 14px;
+        }
+
+        .play-canvas-wrap {
+            position: relative;
+            width: 100%;
+            height: 360px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .play-canvas-wrap canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .play-meta {
+            color: var(--text-dim);
+            font-size: 0.74rem;
+            margin-top: 8px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Authority-along-path SVG chart */
+        .authority-chart {
+            width: 100%;
+            height: 120px;
+            margin-top: 8px;
+        }
+
+        .authority-chart .axis {
+            stroke: var(--separator);
+            stroke-width: 1;
+        }
+
+        .authority-chart .line-pr {
+            fill: none;
+            stroke: #0A84FF;
+            stroke-width: 2;
+        }
+
+        .authority-chart .line-deg {
+            fill: none;
+            stroke: #bf5af2;
+            stroke-width: 2;
+            stroke-dasharray: 4 3;
+        }
+
+        .authority-chart .dot-pr {
+            fill: #0A84FF;
+        }
+
+        .authority-chart .dot-deg {
+            fill: #bf5af2;
+        }
+
+        .authority-chart text {
+            fill: var(--text-dim);
+            font-size: 10px;
+        }
+
+        .authority-legend {
+            display: flex;
+            gap: 14px;
+            margin-top: 6px;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+        }
+
+        .authority-legend .swatch {
+            display: inline-block;
+            width: 14px;
+            height: 2px;
+            margin-right: 4px;
+            vertical-align: middle;
+        }
+
+        .play-empty {
+            color: var(--text-faint);
+            font-size: 0.82rem;
+            text-align: center;
+            padding: 60px 20px;
+            line-height: 1.6;
+        }
+
+        .play-empty a {
+            color: var(--accent);
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
     </style>
 </head>
 
@@ -819,7 +1076,51 @@
     <!-- Tab bar -->
     <div class="tabbar">
         <button id="tab-explore" class="active" onclick="app.switchTab('explore')">Explore</button>
+        <button id="tab-play" onclick="app.switchTab('play')">Play</button>
         <button id="tab-stats" onclick="app.switchTab('stats')">Stats</button>
+    </div>
+
+    <!-- Play overlay -->
+    <div id="play-overlay">
+        <div class="play-grid">
+            <div class="play-card">
+                <h3>BFS frontier expansion — watch the algorithm think</h3>
+                <div class="play-controls">
+                    <input type="text" id="bfs-from" placeholder="From" value="Banana" autocomplete="off" />
+                    <input type="text" id="bfs-to" placeholder="To" value="Adolf Hitler" autocomplete="off" />
+                    <input type="number" id="bfs-max" value="2000" min="100" max="20000" title="Max nodes to expand" />
+                    <button onclick="app.runBfsTrace()">Run BFS</button>
+                </div>
+                <div class="play-canvas-wrap" id="bfs-canvas-wrap">
+                    <div class="play-empty" id="bfs-empty">Run a BFS trace to see concentric frontier rings animate outward from the start node.</div>
+                </div>
+                <div class="play-meta" id="bfs-meta"></div>
+            </div>
+
+            <div class="play-card">
+                <h3>Ego network explorer — local constellation</h3>
+                <div class="play-controls">
+                    <input type="text" id="ego-title" placeholder="Article title" value="Banana" autocomplete="off" />
+                    <select id="ego-hops" style="background:var(--field-bg);color:var(--text);border:1px solid var(--field-border);border-radius:9px;padding:9px 8px;font-size:0.9rem;">
+                        <option value="1">1 hop</option>
+                        <option value="2" selected>2 hops</option>
+                    </select>
+                    <input type="number" id="ego-limit" value="60" min="5" max="200" title="Max nodes" />
+                    <button onclick="app.runEgo()">Build network</button>
+                </div>
+                <div class="play-canvas-wrap" id="ego-canvas-wrap">
+                    <div class="play-empty" id="ego-empty">Build an ego network to see the local cluster of articles around a page.</div>
+                </div>
+                <div class="play-meta" id="ego-meta"></div>
+            </div>
+
+            <div class="play-card" style="grid-column: 1 / -1;">
+                <h3>Authority along path — PageRank per hop</h3>
+                <div id="authority-wrap">
+                    <div class="play-empty">Run a search in the <a onclick="app.switchTab('explore')">Explore</a> tab first. This chart shows how the network authority (PageRank) and in-degree change along your path.</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Stats overlay -->
@@ -1108,9 +1409,25 @@
             cloudGroup: null,
             pathGroup: null,
             lastPath: [],
+            lastPagerank: null,
+            lastPathDegrees: null,
             hovered: null,
             currentTab: 'explore',
             statsLoaded: false,
+            // Play tab state
+            bfsScene: null,
+            bfsRenderer: null,
+            bfsCamera: null,
+            bfsControls: null,
+            bfsAnimId: null,
+            egoScene: null,
+            egoRenderer: null,
+            egoCamera: null,
+            egoControls: null,
+            egoAnimId: null,
+            egoSimNodes: [],
+            egoSimEdges: [],
+            playCanvasesInited: false,
 
             // Wikipedia-inspired palette. Link blue → teal → green along the
             // path; neighbor nodes shift hue based on which path hop they
@@ -1154,9 +1471,14 @@
             switchTab(tab) {
                 this.currentTab = tab;
                 document.getElementById('tab-explore').classList.toggle('active', tab === 'explore');
+                document.getElementById('tab-play').classList.toggle('active', tab === 'play');
                 document.getElementById('tab-stats').classList.toggle('active', tab === 'stats');
                 document.getElementById('stats-overlay').classList.toggle('active', tab === 'stats');
+                document.getElementById('play-overlay').classList.toggle('active', tab === 'play');
                 if (tab === 'stats' && !this.statsLoaded) this.loadStats();
+                if (tab === 'play') this.initPlayCanvases();
+                // If we have a path and pagerank data, refresh the authority chart.
+                if (tab === 'play' && this.lastPath.length && this.lastPagerank) this.renderAuthorityChart();
             },
 
             async loadStats() {
@@ -1264,6 +1586,21 @@
                         ${this.barList(d.top_out_degree, 'out')}
                     </div>
 
+                    <div class="stats-card">
+                        <h3>Top pages by PageRank</h3>
+                        ${d.top_pagerank && d.top_pagerank.length ? this.pagerankList(d.top_pagerank) : '<div class="stats-loading">PageRank not computed yet.</div>'}
+                    </div>
+                    <div class="stats-card">
+                        <h3>Reach from top hubs — nodes per BFS hop</h3>
+                        ${this.histogram(d.hop_distribution)}
+                    </div>
+
+                    <div class="stats-card full">
+                        <h3>Degrees of separation — random-pair shortest paths</h3>
+                        <p class="stats-caption">Sampled ${this.fmtNum(d.separation_distribution.reduce((s,b)=>s+b.count,0))} random article pairs. Most are 3–5 clicks apart — the "small world" of Wikipedia.</p>
+                        ${d.separation_distribution && d.separation_distribution.length ? this.separationHistogram(d.separation_distribution) : '<div class="stats-loading">Computing…</div>'}
+                    </div>
+
                     <div class="stats-card full">
                         <h3>Degree distribution — out-degree across all pages</h3>
                         ${this.degreeDist(d.degree_distribution)}
@@ -1273,11 +1610,90 @@
                         <h3>Dead-end hubs — most linked-to with 0 outgoing</h3>
                         ${d.top_dead_ends && d.top_dead_ends.length ? this.barList(d.top_dead_ends, 'dead') : '<div class="stats-loading">No dead-end articles found.</div>'}
                     </div>
-                    <div class="stats-card">
-                        <h3>Reach from top hubs — nodes per BFS hop</h3>
-                        ${this.histogram(d.hop_distribution)}
+
+                    <div class="stats-card" id="philosophy-card">
+                        <h3>Road to Philosophy</h3>
+                        <p class="stats-caption">A famous Wikipedia quirk: clicking the first link on almost any article eventually reaches <em>Philosophy</em>. Try it below.</p>
+                        <div class="philosophy-controls">
+                            <input type="text" id="philosophy-input" placeholder="e.g. Banana" value="Banana" />
+                            <button id="philosophy-btn" onclick="app.runPhilosophy()">Follow links</button>
+                        </div>
+                        <div id="philosophy-result"></div>
                     </div>
                 `;
+            },
+
+            pagerankList(items) {
+                if (!items || !items.length) return '<div class="stats-loading">No data.</div>';
+                const max = items[0].score || 1;
+                return items.map((it, i) => {
+                    const pct = ((it.score / max) * 100).toFixed(1);
+                    const scoreStr = it.score < 1e-6 ? it.score.toExponential(1) : (it.score * 100).toFixed(4) + '%';
+                    return `<div class="bar-row">
+                        <span class="rank">${i + 1}</span>
+                        <span class="name"><a href="${this.wikiUrl(it.title)}" target="_blank" rel="noopener" title="${it.title}">${it.title.replace(/_/g, ' ')}</a></span>
+                        <span class="bar-wrap"><span class="bar-fill pr" style="width:${pct}%"></span></span>
+                        <span class="val">${scoreStr}</span>
+                    </div>`;
+                }).join('');
+            },
+
+            separationHistogram(buckets) {
+                if (!buckets || !buckets.length) return '<div class="stats-loading">No data.</div>';
+                const max = Math.max(...buckets.map(b => b.count), 1);
+                const noPathBucket = buckets[buckets.length - 1];
+                const realBuckets = buckets.slice(0, -1);
+                const noPathCount = noPathBucket ? noPathBucket.count : 0;
+                const total = buckets.reduce((s, b) => s + b.count, 0);
+                return '<div class="hist">' + realBuckets.map(b => {
+                    const h = ((b.count / max) * 100).toFixed(1);
+                    const pct = total > 0 ? ((b.count / total) * 100).toFixed(1) : '0';
+                    return `<div class="hist-col" title="${b.count} pairs (${pct}%)">
+                        <div class="hist-bar" style="height:${h}%"></div>
+                        <div class="hist-label">${b.hops}${b.hops === 1 ? ' hop' : ' hops'}</div>
+                    </div>`;
+                }).join('') + '</div>' +
+                    (noPathCount > 0 ? `<p class="stats-caption" style="margin-top:8px">No path found within depth cap: ${this.fmtNum(noPathCount)} pairs (${(noPathCount/total*100).toFixed(1)}%)</p>` : '');
+            },
+
+            async runPhilosophy() {
+                const input = document.getElementById('philosophy-input');
+                const btn = document.getElementById('philosophy-btn');
+                const result = document.getElementById('philosophy-result');
+                const title = input.value.trim();
+                if (!title) return;
+                btn.disabled = true;
+                result.innerHTML = '<p style="color:#98989d;margin-top:8px"><span class="spinner"></span>Following first links…</p>';
+                try {
+                    const r = await fetch(`/api/first-link?title=${encodeURIComponent(title)}&max_steps=30`);
+                    const d = await r.json();
+                    if (d.error) {
+                        result.innerHTML = `<p class="error">${d.error}</p>`;
+                        return;
+                    }
+                    this.renderPhilosophyChain(d, result);
+                } catch (e) {
+                    result.innerHTML = `<p class="error">Request failed: ${e.message}</p>`;
+                } finally {
+                    btn.disabled = false;
+                }
+            },
+
+            renderPhilosophyChain(d, el) {
+                const statusMap = {
+                    reached: { label: 'Reached Philosophy ✓', cls: 'ok' },
+                    cycle: { label: 'Cycle detected ↻', cls: 'warn' },
+                    dead_end: { label: 'Dead-end (no outgoing links)', cls: 'err' },
+                    max_steps: { label: 'Max steps reached', cls: 'warn' },
+                };
+                const st = statusMap[d.status] || { label: d.status, cls: '' };
+                const chain = d.chain.map((title, i) => {
+                    const isLast = i === d.chain.length - 1;
+                    const isTarget = title.replace(/ /g, '_') === 'Philosophy';
+                    const cls = isLast && isTarget ? 'philosophy-target' : '';
+                    return `<li class="${cls}"><a href="${this.wikiUrl(title)}" target="_blank" rel="noopener">${title.replace(/_/g, ' ')}</a></li>`;
+                }).join('');
+                el.innerHTML = `<span class="philosophy-status ${st.cls}">${st.label}</span><ol class="philosophy-chain">${chain}</ol>`;
             },
 
             async init() {
@@ -1362,10 +1778,14 @@
                     } else {
                         errorEl.innerHTML = '';
                         this.lastPath = data.path;
+                        this.lastPagerank = data.pagerank || null;
+                        this.lastPathDegrees = data.path_degrees || null;
                         this.renderPath(data.path);
                         this.showInfo(data);
                         await this.rebuildCloud();
                         this.resetCameraFit();
+                        // If the Play tab authority chart is visible, refresh it.
+                        if (this.currentTab === 'play') this.renderAuthorityChart();
                     }
                 } catch (e) {
                     errorEl.innerHTML = `<p class="error">Request failed: ${e.message}</p>`;
@@ -1618,6 +2038,489 @@
                 this.camera.updateProjectionMatrix();
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
                 this.labelRenderer.setSize(window.innerWidth, window.innerHeight);
+                // Resize play tab canvases too.
+                if (this.bfsRenderer) {
+                    const w1 = document.getElementById('bfs-canvas-wrap').clientWidth;
+                    const h1 = document.getElementById('bfs-canvas-wrap').clientHeight;
+                    this.bfsCamera.aspect = w1 / h1;
+                    this.bfsCamera.updateProjectionMatrix();
+                    this.bfsRenderer.setSize(w1, h1);
+                }
+                if (this.egoRenderer) {
+                    const w2 = document.getElementById('ego-canvas-wrap').clientWidth;
+                    const h2 = document.getElementById('ego-canvas-wrap').clientHeight;
+                    this.egoCamera.aspect = w2 / h2;
+                    this.egoCamera.updateProjectionMatrix();
+                    this.egoRenderer.setSize(w2, h2);
+                    this.egoLabelRenderer.setSize(w2, h2);
+                }
+            },
+
+            // ── Play tab: BFS frontier + Ego network + Authority chart ────
+
+            initPlayCanvases() {
+                if (this.playCanvasesInited) return;
+                this.initBfsCanvas();
+                this.initEgoCanvas();
+                this.playCanvasesInited = true;
+            },
+
+            initBfsCanvas() {
+                const wrap = document.getElementById('bfs-canvas-wrap');
+                const w = wrap.clientWidth, h = wrap.clientHeight;
+                this.bfsScene = new THREE.Scene();
+                this.bfsScene.background = new THREE.Color(0x000000);
+                this.bfsCamera = new THREE.PerspectiveCamera(60, w / h, 0.1, 2000);
+                this.bfsCamera.position.set(0, 0, 60);
+                this.bfsRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.bfsRenderer.setSize(w, h);
+                this.bfsRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                wrap.appendChild(this.bfsRenderer.domElement);
+                this.bfsControls = new OrbitControls(this.bfsCamera, this.bfsRenderer.domElement);
+                this.bfsControls.enableDamping = true;
+                const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+                this.bfsScene.add(ambient);
+                const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+                dir.position.set(10, 20, 10);
+                this.bfsScene.add(dir);
+                const animate = () => {
+                    this.bfsAnimId = requestAnimationFrame(animate);
+                    this.bfsControls.update();
+                    this.bfsRenderer.render(this.bfsScene, this.bfsCamera);
+                };
+                animate();
+            },
+
+            initEgoCanvas() {
+                const wrap = document.getElementById('ego-canvas-wrap');
+                const w = wrap.clientWidth, h = wrap.clientHeight;
+                this.egoScene = new THREE.Scene();
+                this.egoScene.background = new THREE.Color(0x000000);
+                this.egoCamera = new THREE.PerspectiveCamera(60, w / h, 0.1, 2000);
+                this.egoCamera.position.set(0, 0, 50);
+                this.egoRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.egoRenderer.setSize(w, h);
+                this.egoRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                wrap.appendChild(this.egoRenderer.domElement);
+                // Label renderer for node titles.
+                this.egoLabelRenderer = new CSS2DRenderer();
+                this.egoLabelRenderer.setSize(w, h);
+                this.egoLabelRenderer.domElement.style.position = 'absolute';
+                this.egoLabelRenderer.domElement.style.top = '0';
+                this.egoLabelRenderer.domElement.style.left = '0';
+                this.egoLabelRenderer.domElement.style.pointerEvents = 'none';
+                wrap.appendChild(this.egoLabelRenderer.domElement);
+                this.egoControls = new OrbitControls(this.egoCamera, this.egoRenderer.domElement);
+                this.egoControls.enableDamping = true;
+                const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+                this.egoScene.add(ambient);
+                const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+                dir.position.set(10, 20, 10);
+                this.egoScene.add(dir);
+                const animate = () => {
+                    this.egoAnimId = requestAnimationFrame(animate);
+                    this.egoSimStep();
+                    this.egoControls.update();
+                    this.egoRenderer.render(this.egoScene, this.egoCamera);
+                    this.egoLabelRenderer.render(this.egoScene, this.egoCamera);
+                };
+                animate();
+            },
+
+            async runBfsTrace() {
+                const from = document.getElementById('bfs-from').value.trim();
+                const to = document.getElementById('bfs-to').value.trim();
+                const maxNodes = parseInt(document.getElementById('bfs-max').value, 10) || 2000;
+                if (!from || !to) return;
+                const meta = document.getElementById('bfs-meta');
+                meta.innerHTML = '<span class="spinner"></span> Running BFS trace…';
+                // Clear previous
+                while (this.bfsScene.children.length > 2) {
+                    const obj = this.bfsScene.children[2];
+                    this.bfsScene.remove(obj);
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) obj.material.dispose();
+                }
+                try {
+                    const r = await fetch('/api/bfs-trace', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ from, to, max_nodes: maxNodes })
+                    });
+                    const d = await r.json();
+                    if (d.error) { meta.innerHTML = `<span style="color:#ff453a">${d.error}</span>`; return; }
+                    this.renderBfsTrace(d);
+                    const meetStr = d.meeting_node ? `Meeting node: ${d.meeting_node.replace(/_/g,' ')}` : 'No path found within node cap';
+                    meta.innerHTML = `${d.layers.length} layers · ${d.total_expanded} nodes expanded · ${meetStr}`;
+                } catch (e) {
+                    meta.innerHTML = `<span style="color:#ff453a">${e.message}</span>`;
+                }
+            },
+
+            renderBfsTrace(d) {
+                // Group layers by depth, separating fwd and bwd.
+                const pathSet = new Set(d.path.map(t => t.replace(/ /g, '_')));
+                const fwdLayers = d.layers.filter(l => l.direction === 'fwd');
+                const bwdLayers = d.layers.filter(l => l.direction === 'bwd');
+                const allLayers = [...fwdLayers, ...bwdLayers];
+                // Build a map of title → {layer, direction, depth} for positioning.
+                const nodeInfo = new Map();
+                allLayers.forEach((layer, idx) => {
+                    layer.nodes.forEach(title => {
+                        const key = title.replace(/ /g, '_');
+                        if (!nodeInfo.has(key)) {
+                            nodeInfo.set(key, { direction: layer.direction, depth: layer.depth, idx });
+                        }
+                    });
+                });
+
+                // Place nodes on concentric rings. fwd grows on +x side, bwd on -x side.
+                // Each depth is a ring of radius = depth * 8.
+                const placed = new Map(); // title → Vector3
+                const rings = new Map();  // depth → count
+                allLayers.forEach(layer => {
+                    layer.nodes.forEach(title => {
+                        const key = title.replace(/ /g, '_');
+                        if (placed.has(key)) return;
+                        const depth = layer.depth;
+                        const count = layer.count;
+                        const sign = layer.direction === 'fwd' ? 1 : -1;
+                        const ringKey = `${layer.direction}-${depth}`;
+                        const ringIdx = rings.get(ringKey) || 0;
+                        rings.set(ringKey, ringIdx + 1);
+                        const angle = (ringIdx / count) * Math.PI * 2;
+                        const r = depth === 0 ? 0 : depth * 7;
+                        const x = sign * (depth === 0 ? 0 : r * Math.cos(angle));
+                        const y = depth === 0 ? 0 : r * Math.sin(angle);
+                        const z = depth === 0 ? 0 : (Math.random() - 0.5) * depth * 2;
+                        placed.set(key, new THREE.Vector3(x, y, z));
+                    });
+                });
+
+                // Draw nodes as small spheres, color-coded.
+                // Path nodes = gradient (start green → end red), fwd = blue, bwd = purple.
+                const pathIndex = new Map();
+                d.path.forEach((t, i) => pathIndex.set(t.replace(/ /g, '_'), i));
+
+                const pathPositions = [];
+                placed.forEach((pos, key) => {
+                    const isPath = pathSet.has(key);
+                    const isStart = key === d.from.replace(/ /g, '_');
+                    const isEnd = key === d.to.replace(/ /g, '_');
+                    let color, size;
+                    if (isStart) { color = 0x30d158; size = 1.2; }
+                    else if (isEnd) { color = 0xff453a; size = 1.2; }
+                    else if (isPath) {
+                        const pi = pathIndex.get(key) || 0;
+                        const f = d.path.length > 1 ? pi / (d.path.length - 1) : 0;
+                        color = this.lerpColor(0x30d158, 0xff453a, f);
+                        size = 0.9;
+                        pathPositions.push({ pos, key });
+                    } else {
+                        const info = nodeInfo.get(key);
+                        color = info.direction === 'fwd' ? 0x3366CC : 0xbf5af2;
+                        size = 0.3;
+                    }
+                    const geom = new THREE.SphereGeometry(size, 12, 12);
+                    const mat = new THREE.MeshStandardMaterial({
+                        color,
+                        emissive: color,
+                        emissiveIntensity: isPath || isStart || isEnd ? 0.4 : 0.1,
+                        roughness: 0.5,
+                    });
+                    const mesh = new THREE.Mesh(geom, mat);
+                    mesh.position.copy(pos);
+                    mesh.userData = { key };
+                    // Stagger fade-in by depth.
+                    mesh.scale.setScalar(0);
+                    const delay = (nodeInfo.get(key)?.depth || 0) * 200;
+                    setTimeout(() => {
+                        const animScale = () => {
+                            mesh.scale.x += (1 - mesh.scale.x) * 0.2;
+                            mesh.scale.y = mesh.scale.x;
+                            mesh.scale.z = mesh.scale.x;
+                            if (mesh.scale.x < 0.95) requestAnimationFrame(animScale);
+                        };
+                        animScale();
+                    }, delay);
+                    this.bfsScene.add(mesh);
+                });
+
+                // Draw path as connected line.
+                if (pathPositions.length > 1) {
+                    // Sort by path order.
+                    pathPositions.sort((a, b) => (pathIndex.get(a.key) || 0) - (pathIndex.get(b.key) || 0));
+                    const positions = [];
+                    const colors = [];
+                    pathPositions.forEach((p, i) => {
+                        positions.push(p.pos.x, p.pos.y, p.pos.z);
+                        const f = pathPositions.length > 1 ? i / (pathPositions.length - 1) : 0;
+                        const c = new THREE.Color(this.lerpColor(0x30d158, 0xff453a, f));
+                        colors.push(c.r, c.g, c.b);
+                    });
+                    const geom = new THREE.BufferGeometry();
+                    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                    geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+                    const mat = new THREE.LineBasicMaterial({ vertexColors: true, linewidth: 3, transparent: true, opacity: 0.9 });
+                    const line = new THREE.Line(geom, mat);
+                    this.bfsScene.add(line);
+                }
+
+                // Fit camera.
+                const box = new THREE.Box3();
+                placed.forEach(v => box.expandByPoint(v));
+                const center = new THREE.Vector3();
+                box.getCenter(center);
+                const size = new THREE.Vector3();
+                box.getSize(size);
+                const maxDim = Math.max(size.x, size.y, size.z, 10);
+                this.bfsControls.target.copy(center);
+                this.bfsCamera.position.set(center.x, center.y, center.z + maxDim * 1.8);
+                this.bfsControls.update();
+            },
+
+            async runEgo() {
+                const title = document.getElementById('ego-title').value.trim();
+                const hops = parseInt(document.getElementById('ego-hops').value, 10) || 1;
+                const limit = parseInt(document.getElementById('ego-limit').value, 10) || 60;
+                if (!title) return;
+                const meta = document.getElementById('ego-meta');
+                meta.innerHTML = '<span class="spinner"></span> Building ego network…';
+                // Clear previous.
+                while (this.egoScene.children.length > 2) {
+                    const obj = this.egoScene.children[2];
+                    this.egoScene.remove(obj);
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) obj.material.dispose();
+                }
+                this.egoSimNodes = [];
+                this.egoSimEdges = [];
+                try {
+                    const r = await fetch('/api/ego', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title, hops, limit })
+                    });
+                    const d = await r.json();
+                    if (d.error) { meta.innerHTML = `<span style="color:#ff453a">${d.error}</span>`; return; }
+                    this.renderEgoNetwork(d);
+                    meta.innerHTML = `${d.nodes.length} nodes · ${d.edges.length} edges · ${d.hops}-hop neighborhood of ${d.ego.replace(/_/g,' ')}`;
+                } catch (e) {
+                    meta.innerHTML = `<span style="color:#ff453a">${e.message}</span>`;
+                }
+            },
+
+            renderEgoNetwork(d) {
+                // Build node meshes + sim state. Ego at center; neighbors on a sphere.
+                const cidToIdx = new Map();
+                d.nodes.forEach((n, i) => cidToIdx.set(n.cid, i));
+
+                const maxDeg = Math.max(...d.nodes.map(n => n.degree), 1);
+                this.egoSimNodes = d.nodes.map((n, i) => {
+                    const isEgo = n.cid === d.ego_cid;
+                    const t = n.degree / maxDeg;
+                    const size = isEgo ? 1.5 : 0.4 + t * 0.8;
+                    const color = isEgo ? 0x30d158 : this.lerpColor(0x3366CC, 0x00AF89, t);
+                    const geom = new THREE.SphereGeometry(size, 16, 16);
+                    const mat = new THREE.MeshStandardMaterial({
+                        color,
+                        emissive: color,
+                        emissiveIntensity: isEgo ? 0.5 : 0.2,
+                        roughness: 0.5,
+                    });
+                    const mesh = new THREE.Mesh(geom, mat);
+                    // Initial position: ego at center, others on a sphere.
+                    if (isEgo) {
+                        mesh.position.set(0, 0, 0);
+                    } else {
+                        const phi = Math.acos(1 - 2 * (i / d.nodes.length));
+                        const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+                        const r = 20;
+                        mesh.position.set(
+                            r * Math.sin(phi) * Math.cos(theta),
+                            r * Math.sin(phi) * Math.sin(theta),
+                            r * Math.cos(phi)
+                        );
+                    }
+                    mesh.userData = { title: n.title, degree: n.degree, isEgo };
+                    this.egoScene.add(mesh);
+                    // Label for ego and high-degree nodes.
+                    if (isEgo || n.degree > maxDeg * 0.3) {
+                        const div = document.createElement('div');
+                        div.className = 'node-label' + (isEgo ? '' : ' neighbor-label');
+                        div.textContent = n.title.replace(/_/g, ' ');
+                        const label = new CSS2DObject(div);
+                        label.position.set(0, size + 0.5, 0);
+                        label.visible = isEgo;
+                        mesh.add(label);
+                    }
+                    return {
+                        mesh,
+                        vx: 0, vy: 0, vz: 0,
+                        degree: n.degree,
+                        isEgo,
+                    };
+                });
+
+                // Build edges as a line segments geometry, and store sim edges.
+                this.egoSimEdges = d.edges.map(([a, b]) => ({
+                    a: cidToIdx.get(a),
+                    b: cidToIdx.get(b),
+                })).filter(e => e.a != null && e.b != null);
+
+                const positions = new Float32Array(this.egoSimEdges.length * 6);
+                const colors = new Float32Array(this.egoSimEdges.length * 6);
+                this.egoSimEdges.forEach((e, i) => {
+                    const pa = this.egoSimNodes[e.a].mesh.position;
+                    const pb = this.egoSimNodes[e.b].mesh.position;
+                    positions[i*6] = pa.x; positions[i*6+1] = pa.y; positions[i*6+2] = pa.z;
+                    positions[i*6+3] = pb.x; positions[i*6+4] = pb.y; positions[i*6+5] = pb.z;
+                    colors[i*6] = 0.2; colors[i*6+1] = 0.5; colors[i*6+2] = 1.0;
+                    colors[i*6+3] = 0.2; colors[i*6+4] = 0.5; colors[i*6+5] = 1.0;
+                });
+                const geom = new THREE.BufferGeometry();
+                geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                const mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.3 });
+                const lines = new THREE.LineSegments(geom, mat);
+                lines.userData.isEgoLines = true;
+                this.egoScene.add(lines);
+
+                // Fit camera.
+                this.egoCamera.position.set(0, 0, 50);
+                this.egoControls.target.set(0, 0, 0);
+                this.egoControls.update();
+            },
+
+            // One step of a simple force-directed layout: repulsion between all
+            // nodes, spring attraction along edges, gentle centering. Ego is pinned.
+            egoSimStep() {
+                if (this.egoSimNodes.length === 0) return;
+                const REPULSION = 30;
+                const SPRING = 0.02;
+                const SPRING_LEN = 6;
+                const CENTER = 0.002;
+                const DAMP = 0.85;
+
+                // Repulsion (O(n²) but n is small — capped at ~200).
+                for (let i = 0; i < this.egoSimNodes.length; i++) {
+                    const a = this.egoSimNodes[i];
+                    if (a.isEgo) continue;
+                    for (let j = i + 1; j < this.egoSimNodes.length; j++) {
+                        const b = this.egoSimNodes[j];
+                        const dx = a.mesh.position.x - b.mesh.position.x;
+                        const dy = a.mesh.position.y - b.mesh.position.y;
+                        const dz = a.mesh.position.z - b.mesh.position.z;
+                        const d2 = dx*dx + dy*dy + dz*dz + 0.01;
+                        const d = Math.sqrt(d2);
+                        const f = REPULSION / d2;
+                        const fx = (dx / d) * f;
+                        const fy = (dy / d) * f;
+                        const fz = (dz / d) * f;
+                        a.vx += fx; a.vy += fy; a.vz += fz;
+                        if (!b.isEgo) {
+                            b.vx -= fx; b.vy -= fy; b.vz -= fz;
+                        }
+                    }
+                }
+
+                // Spring attraction along edges.
+                for (const e of this.egoSimEdges) {
+                    const a = this.egoSimNodes[e.a];
+                    const b = this.egoSimNodes[e.b];
+                    const dx = b.mesh.position.x - a.mesh.position.x;
+                    const dy = b.mesh.position.y - a.mesh.position.y;
+                    const dz = b.mesh.position.z - a.mesh.position.z;
+                    const d = Math.sqrt(dx*dx + dy*dy + dz*dz) + 0.01;
+                    const f = (d - SPRING_LEN) * SPRING;
+                    const fx = (dx / d) * f;
+                    const fy = (dy / d) * f;
+                    const fz = (dz / d) * f;
+                    if (!a.isEgo) { a.vx += fx; a.vy += fy; a.vz += fz; }
+                    if (!b.isEgo) { b.vx -= fx; b.vy -= fy; b.vz -= fz; }
+                }
+
+                // Gentle centering + integrate.
+                for (const n of this.egoSimNodes) {
+                    if (n.isEgo) continue;
+                    n.vx -= n.mesh.position.x * CENTER;
+                    n.vy -= n.mesh.position.y * CENTER;
+                    n.vz -= n.mesh.position.z * CENTER;
+                    n.vx *= DAMP;
+                    n.vy *= DAMP;
+                    n.vz *= DAMP;
+                    n.mesh.position.x += n.vx;
+                    n.mesh.position.y += n.vy;
+                    n.mesh.position.z += n.vz;
+                }
+
+                // Update edge positions.
+                const lines = this.egoScene.children.find(c => c.userData.isEgoLines);
+                if (lines) {
+                    const posAttr = lines.geometry.attributes.position;
+                    this.egoSimEdges.forEach((e, i) => {
+                        const pa = this.egoSimNodes[e.a].mesh.position;
+                        const pb = this.egoSimNodes[e.b].mesh.position;
+                        posAttr.array[i*6] = pa.x;
+                        posAttr.array[i*6+1] = pa.y;
+                        posAttr.array[i*6+2] = pa.z;
+                        posAttr.array[i*6+3] = pb.x;
+                        posAttr.array[i*6+4] = pb.y;
+                        posAttr.array[i*6+5] = pb.z;
+                    });
+                    posAttr.needsUpdate = true;
+                }
+            },
+
+            renderAuthorityChart() {
+                const wrap = document.getElementById('authority-wrap');
+                if (!this.lastPath.length || !this.lastPagerank) {
+                    wrap.innerHTML = '<div class="play-empty">Run a search in the <a onclick="app.switchTab(\'explore\')">Explore</a> tab first. ' +
+                        (this.lastPath.length && !this.lastPagerank ? 'PageRank is still computing in the background — try again in a minute.' : 'This chart shows how the network authority (PageRank) and in-degree change along your path.') +
+                        '</div>';
+                    return;
+                }
+                const pr = this.lastPagerank;
+                const deg = this.lastPathDegrees || [];
+                const labels = this.lastPath.map(t => t.replace(/_/g, ' '));
+                const n = labels.length;
+                const w = wrap.clientWidth || 600;
+                const h = 140;
+                const pad = { l: 40, r: 16, t: 12, b: 28 };
+                const iw = w - pad.l - pad.r;
+                const ih = h - pad.t - pad.b;
+
+                const prMax = Math.max(...pr, 1e-9);
+                const degMax = Math.max(...deg, 1);
+
+                const x = i => pad.l + (n > 1 ? (i / (n - 1)) * iw : iw / 2);
+                const yPr = v => pad.t + ih - (v / prMax) * ih;
+                const yDeg = v => pad.t + ih - (v / degMax) * ih;
+
+                const prPath = pr.map((v, i) => `${x(i)},${yPr(v)}`).join(' ');
+                const degPath = deg.map((v, i) => `${x(i)},${yDeg(v)}`).join(' ');
+                const prDots = pr.map((v, i) => `<circle class="dot-pr" cx="${x(i)}" cy="${yPr(v)}" r="3"></circle>`).join('');
+                const degDots = deg.map((v, i) => `<circle class="dot-deg" cx="${x(i)}" cy="${yDeg(v)}" r="3"></circle>`).join('');
+                const xLabels = labels.map((l, i) => {
+                    const tx = x(i);
+                    const short = l.length > 12 ? l.slice(0, 11) + '…' : l;
+                    return `<text x="${tx}" y="${h - 10}" text-anchor="middle">${short}</text>`;
+                }).join('');
+
+                wrap.innerHTML = `
+                    <svg class="authority-chart" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+                        <line class="axis" x1="${pad.l}" y1="${pad.t + ih}" x2="${pad.l + iw}" y2="${pad.t + ih}"></line>
+                        <polyline class="line-pr" points="${prPath}"></polyline>
+                        <polyline class="line-deg" points="${degPath}"></polyline>
+                        ${prDots}
+                        ${degDots}
+                        ${xLabels}
+                    </svg>
+                    <div class="authority-legend">
+                        <span><span class="swatch" style="background:#0A84FF"></span>PageRank (normalised)</span>
+                        <span><span class="swatch" style="background:#bf5af2"></span>In-degree</span>
+                    </div>
+                `;
             },
 
             onPointerMove(event) {
