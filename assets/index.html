@@ -1483,7 +1483,7 @@
 
             async loadStats() {
                 const content = document.getElementById('stats-content');
-                content.innerHTML = '<div class="stats-loading"><span class="spinner"></span>Computing graph insights (first load may take a while)…</div>';
+                content.innerHTML = '<div class="stats-loading"><span class="spinner"></span>Computing graph insights…</div>';
                 try {
                     const r = await fetch('/api/stats');
                     const d = await r.json();
@@ -1491,10 +1491,28 @@
                         content.innerHTML = `<div class="stats-loading" style="color:#ff453a">${d.error}</div>`;
                         return;
                     }
+                    // PageRank top-N is empty initially; show a placeholder
+                    // and kick off a background fetch for it.
+                    d.top_pagerank = [];
                     this.renderStats(d);
                     this.statsLoaded = true;
+                    this.loadPagerank();
                 } catch (e) {
                     content.innerHTML = `<div class="stats-loading" style="color:#ff453a">Failed to load stats: ${e.message}</div>`;
+                }
+            },
+
+            async loadPagerank() {
+                const card = document.querySelector('#stats-content .stats-card:nth-of-type(3) .stats-loading');
+                try {
+                    const r = await fetch('/api/pagerank');
+                    const d = await r.json();
+                    if (d.top && d.top.length) {
+                        const el = document.querySelector('#stats-content .pr-list');
+                        if (el) el.innerHTML = this.pagerankList(d.top);
+                    }
+                } catch (e) {
+                    if (card) card.textContent = 'PageRank computation timed out.';
                 }
             },
 
@@ -1588,7 +1606,7 @@
 
                     <div class="stats-card">
                         <h3>Top pages by PageRank</h3>
-                        ${d.top_pagerank && d.top_pagerank.length ? this.pagerankList(d.top_pagerank) : '<div class="stats-loading">PageRank not computed yet.</div>'}
+                        <div class="pr-list">${d.top_pagerank && d.top_pagerank.length ? this.pagerankList(d.top_pagerank) : '<div class="stats-loading"><span class="spinner"></span>Computing PageRank (may take a few minutes)…</div>'}</div>
                     </div>
                     <div class="stats-card">
                         <h3>Reach from top hubs — nodes per BFS hop</h3>

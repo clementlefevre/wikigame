@@ -145,6 +145,7 @@ pub async fn serve(port: u16, handle: AppHandle) {
         .route("/api/setup", post(setup_handler))
         .route("/api/progress", get(progress_handler))
         .route("/api/stats", get(stats_handler))
+        .route("/api/pagerank", get(pagerank_handler))
         .route("/search", post(search_handler))
         .route("/neighbors", post(neighbors_handler))
         .route("/api/ego", post(ego_handler))
@@ -532,33 +533,25 @@ async fn stats_handler(State(ws): State<Arc<WebState>>) -> Response {
     {
         let guard = stats_lock.lock().await;
         if let Some(cached) = guard.as_ref() {
-            return Json((**cached).clone()).into_response();
+            let mut out = (**cached).clone();
+            // Merge in pagerank top-N if it's been computed since the stats
+            // were cached (so the stats card updates without a full recompute).
+            let pr_guard = pagerank_lock.lock().await;
+            if let Some(pr) = &*pr_guard {
+                if out.top_pagerank.is_empty() {
+                    out.top_pagerank = stats::top_pagerank_from_slice(pr, &titles.titles, 20);
+                }
+            }
+            return Json(out).into_response();
         }
     }
 
-    // If pagerank is already cached (e.g. computed by a prior /search call),
-    // reuse it instead of recomputing inside stats::compute.
-    let pr_cache: Option<Arc<Vec<f32>>> = {
-        let guard = pagerank_lock.lock().await;
-        guard.clone()
-    };
-    let pr_was_cached = pr_cache.is_some();
-
-    // Slow path: compute on a blocking thread, then cache.
-    let (computed, pr_vector) = tokio::task::spawn_blocking(move || {
-        stats::compute(&graph, &titles.titles, pr_cache.as_ref().map(|v| v.as_slice()))
+    // Slow path: compute fast stats (no PageRank) on a blocking thread.
+    let computed = tokio::task::spawn_blocking(move || {
+        stats::compute_fast(&graph, &titles.titles)
     })
     .await
-    .unwrap_or_else(|_| (GraphStats::default(), Vec::new()));
-
-    // Cache the full pagerank vector (if it was freshly computed) so the
-    // /search endpoint can augment its responses with per-node authority.
-    if !pr_was_cached && !pr_vector.is_empty() {
-        let mut guard = pagerank_lock.lock().await;
-        if guard.is_none() {
-            *guard = Some(Arc::new(pr_vector));
-        }
-    }
+    .unwrap_or_else(|_| GraphStats::default());
 
     let cached = Arc::new(computed);
 
@@ -567,6 +560,62 @@ async fn stats_handler(State(ws): State<Arc<WebState>>) -> Response {
         *guard = Some(cached.clone());
     }
     Json((**guard.as_ref().unwrap()).clone()).into_response()
+}
+
+async fn pagerank_handler(State(ws): State<Arc<WebState>>) -> Response {
+    // Grab the graph + titles + pagerank cache lock.
+    let (graph, titles, pagerank_lock) = {
+        let state = ws.handle.state.lock().await;
+        match &*state {
+            AppState::Ready {
+                graph,
+                titles,
+                pagerank,
+                ..
+            } => (graph.clone(), titles.clone(), pagerank.clone()),
+            _ => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({ "error": "Graph not ready yet." })),
+                )
+                    .into_response();
+            }
+        }
+    };
+
+    // Fast path: already computed.
+    {
+        let guard = pagerank_lock.lock().await;
+        if let Some(cached) = &*guard {
+            let top = stats::top_pagerank_from_slice(cached, &titles.titles, 20);
+            return Json(serde_json::json!({
+                "status": "ready",
+                "top": top,
+            }))
+            .into_response();
+        }
+    }
+
+    // Slow path: compute PageRank on a blocking thread (this takes minutes
+    // on the full graph — the client should use a long timeout).
+    let (top, pr_vector) = tokio::task::spawn_blocking(move || {
+        stats::compute_pagerank(&graph, &titles.titles)
+    })
+    .await
+    .unwrap_or_else(|_| (Vec::new(), Vec::new()));
+
+    if !pr_vector.is_empty() {
+        let mut guard = pagerank_lock.lock().await;
+        if guard.is_none() {
+            *guard = Some(Arc::new(pr_vector));
+        }
+    }
+
+    Json(serde_json::json!({
+        "status": "ready",
+        "top": top,
+    }))
+    .into_response()
 }
 
 // ── Ego network ──────────────────────────────────────────────────────────────

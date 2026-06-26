@@ -82,25 +82,9 @@ const SEP_SAMPLES: usize = 2000;
 const PR_DAMPING: f64 = 0.85;
 const PR_ITERS: usize = 20;
 
-/// Compute the full stats payload.
-///
-/// Degree stats are an O(V) scan of the offset arrays. The hop distribution
-/// runs a handful of seeded single-source BFS (depth-limited) from popular
-/// hub nodes and buckets the reached nodes by distance. The separation
-/// distribution runs `SEP_SAMPLES` random-pair bidirectional BFS queries.
-/// PageRank runs `PR_ITERS` power iterations on the forward CSR.
-///
-/// If `pagerank_cache` is `Some`, the PageRank vector is reused instead of
-/// being recomputed (the stats endpoint and the search endpoint both need
-/// PageRank, so we share the work).
-///
-/// Returns the stats payload *and* the full per-node PageRank vector (so the
-/// caller can cache it for the /search endpoint).
-pub fn compute(
-    graph: &LoadedGraph,
-    titles: &[String],
-    pagerank_cache: Option<&[f32]>,
-) -> (GraphStats, Vec<f32>) {
+/// Compute the fast stats payload (everything except PageRank). This is
+/// O(V+E) and completes in a few seconds even on the full 648M-edge graph.
+pub fn compute_fast(graph: &LoadedGraph, titles: &[String]) -> GraphStats {
     let num_nodes = node_count(&graph.forward);
     let num_edges = edge_count(&graph.forward);
 
@@ -125,13 +109,7 @@ pub fn compute(
 
     let separation_distribution = separation_distribution(graph);
 
-    let pagerank: Vec<f32> = match pagerank_cache {
-        Some(c) => c.to_vec(),
-        None => pagerank(&graph.forward),
-    };
-    let top_pagerank = top_pagerank(&pagerank, titles, TOP_N);
-
-    let stats = GraphStats {
+    GraphStats {
         num_nodes,
         num_edges,
         density,
@@ -145,8 +123,40 @@ pub fn compute(
         top_dead_ends,
         hop_distribution,
         separation_distribution,
-        top_pagerank,
+        top_pagerank: Vec::new(),
+    }
+}
+
+/// Compute PageRank and return the top-N entries plus the full vector (for
+/// caching). This is O(PR_ITERS * E) and takes several minutes on the full
+/// graph.
+pub fn compute_pagerank(graph: &LoadedGraph, titles: &[String]) -> (Vec<PageRankStat>, Vec<f32>) {
+    let pr = pagerank(&graph.forward);
+    let top = top_pagerank_from_slice(&pr, titles, TOP_N);
+    (top, pr)
+}
+
+/// Compute the full stats payload.
+///
+/// If `pagerank_cache` is `Some`, the PageRank vector is reused instead of
+/// being recomputed (the stats endpoint and the search endpoint both need
+/// PageRank, so we share the work).
+///
+/// Returns the stats payload *and* the full per-node PageRank vector (so the
+/// caller can cache it for the /search endpoint).
+pub fn compute(
+    graph: &LoadedGraph,
+    titles: &[String],
+    pagerank_cache: Option<&[f32]>,
+) -> (GraphStats, Vec<f32>) {
+    let mut stats = compute_fast(graph, titles);
+
+    let pagerank: Vec<f32> = match pagerank_cache {
+        Some(c) => c.to_vec(),
+        None => pagerank(&graph.forward),
     };
+    stats.top_pagerank = top_pagerank_from_slice(&pagerank, titles, TOP_N);
+
     (stats, pagerank)
 }
 
@@ -482,7 +492,7 @@ pub fn pagerank(forward: &WikiCsr) -> Vec<f32> {
 }
 
 /// Top-N pages by PageRank score.
-fn top_pagerank(ranks: &[f32], titles: &[String], n: usize) -> Vec<PageRankStat> {
+pub fn top_pagerank_from_slice(ranks: &[f32], titles: &[String], n: usize) -> Vec<PageRankStat> {
     // f32 isn't Ord, so we collect (bits_as_u32, cid) pairs and use the
     // bit pattern for ordering (works correctly for non-negative f32 values,
     // which PageRank always is).
